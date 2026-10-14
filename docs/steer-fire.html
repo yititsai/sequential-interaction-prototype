@@ -1,0 +1,754 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Steer + Fire</title>
+<style>
+  /* Layout: an open play area above a row of key caps. The player stands on a floor with three floating bars around it, so there is clear room to move and jump. */
+  :root {
+    --bg: #f2f2f2;
+    --fg: #1d1d1d;
+    --muted: #6b6b6b;
+    --platform: #a3a3a3;
+    --proj: #3a3a3a;
+    --ring: #6b6b6b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #1b1b1b;
+      --fg: #ececec;
+      --muted: #9a9a9a;
+      --platform: #585858;
+      --proj: #dcdcdc;
+      --ring: #bdbdbd;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #1b1b1b;
+    --fg: #ececec;
+    --muted: #9a9a9a;
+    --platform: #585858;
+    --proj: #dcdcdc;
+    --ring: #bdbdbd;
+    color-scheme: dark;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    overflow: hidden;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+  }
+
+  canvas {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+    touch-action: none;
+  }
+
+  .keys {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+    padding-inline: 16px;
+    display: flex;
+    justify-content: center;
+    align-items: flex-end;
+    gap: 20px;
+    touch-action: none;
+  }
+  .cluster { display: flex; gap: 8px; }
+
+  .key {
+    width: 46px;
+    height: 46px;
+    display: grid;
+    place-items: center;
+    border: 1.5px solid var(--fg);
+    border-radius: 6px;
+    background: var(--bg);
+    box-shadow: 0 3px 0 var(--fg);
+    touch-action: none;
+    cursor: pointer;
+    transition: none;
+  }
+  .key.space { width: clamp(96px, 28vw, 150px); }
+  .key svg {
+    width: 20px;
+    height: 20px;
+    fill: none;
+    stroke: var(--fg);
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    pointer-events: none;
+  }
+  .key.down {
+    background: var(--fg);
+    transform: translateY(3px);
+    box-shadow: 0 0 0 var(--fg);
+  }
+  .key.down svg { stroke: var(--bg); }
+
+  .reset {
+    position: fixed;
+    right: 16px;
+    top: calc(12px + env(safe-area-inset-top, 0px));
+    min-height: 40px;
+    padding: 0 10px;
+    background: none;
+    border: 0;
+    font: inherit;
+    font-size: 13px;
+    color: var(--muted);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    cursor: pointer;
+    transition: opacity .4s ease, color .2s ease;
+  }
+  .reset:hover:not(:disabled) { color: var(--fg); }
+  .reset:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; color: var(--fg); }
+  .reset:disabled { opacity: .35; cursor: default; text-decoration: none; }
+
+  /* ---------- Behavior Controls panel (steering) ---------- */
+  .panel {
+    position: fixed;
+    left: 16px;
+    top: calc(12px + env(safe-area-inset-top, 0px));
+    width: 300px;
+    max-width: calc(100vw - 112px);        /* leaves room for the Reset link at top-right */
+    max-height: calc(100vh - 140px);
+    overflow: auto;
+    background: var(--bg);
+    border: 1.5px solid var(--fg);
+    border-radius: 8px;
+    font-size: 13px;
+    -webkit-user-select: text;
+    user-select: text;
+    z-index: 2;
+  }
+  .panel summary {
+    min-height: 40px;
+    padding: 0 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    font-weight: 600;
+    list-style: none;
+  }
+  .panel summary::-webkit-details-marker { display: none; }
+  .panel summary::before { content: "\25B8"; transition: transform .15s ease; }
+  .panel[open] summary::before { transform: rotate(90deg); }
+  .panel summary:focus-visible { outline: 2px solid var(--fg); outline-offset: -4px; }
+  .panel .body { padding: 2px 12px 12px; display: grid; gap: 12px; }
+  .panel .hint { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.4; }
+  .ctl { display: grid; gap: 4px; }
+  .ctl .row { display: flex; justify-content: space-between; gap: 8px; }
+  .ctl label { font-weight: 500; }
+  .ctl output { font-variant-numeric: tabular-nums; color: var(--muted); white-space: nowrap; }
+  .ctl .range { display: flex; justify-content: space-between; color: var(--muted); font-size: 11px; }
+  .ctl input[type="range"] { width: 100%; margin: 0; accent-color: var(--fg); }
+  .ctl select {
+    font: inherit;
+    padding: 6px 8px;
+    color: var(--fg);
+    background: var(--bg);
+    border: 1px solid var(--muted);
+    border-radius: 6px;
+  }
+  .ctl small { color: var(--muted); font-size: 11px; line-height: 1.35; }
+  .panel .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+  .panel .actions button {
+    flex: 1 1 auto;
+    min-height: 36px;
+    padding: 0 10px;
+    font: inherit;
+    color: var(--fg);
+    background: var(--bg);
+    border: 1.5px solid var(--fg);
+    border-radius: 6px;
+    cursor: pointer;
+  }
+  .panel .actions button:hover { background: var(--fg); color: var(--bg); }
+  .panel .actions button:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
+  .panel .status { min-height: 1.2em; margin: 0; color: var(--muted); font-size: 12px; }
+</style>
+
+<canvas id="c" aria-label="Play area. Arrow keys move and jump the circle, space fires a projectile."></canvas>
+
+<div class="keys" id="keys">
+  <div class="cluster">
+    <div class="key" data-code="ArrowLeft" aria-hidden="true"><svg viewBox="0 0 20 20"><path d="M12 4l-6 6 6 6"/></svg></div>
+    <div class="key" data-code="ArrowUp" aria-hidden="true"><svg viewBox="0 0 20 20"><path d="M4 12l6-6 6 6"/></svg></div>
+    <div class="key" data-code="ArrowRight" aria-hidden="true"><svg viewBox="0 0 20 20"><path d="M8 4l6 6-6 6"/></svg></div>
+  </div>
+  <div class="key space" data-code="Space" aria-hidden="true"><svg viewBox="0 0 20 20"><path d="M3 7v5h14V7"/></svg></div>
+</div>
+
+<button class="reset" id="reset" type="button" disabled>Reset</button>
+
+<details class="panel" id="panel">
+  <summary>Behavior Controls · Steering</summary>
+  <div class="body">
+    <p class="hint">Tunes left/right steering (Arrow keys or the on-screen arrow caps). Changes apply live.</p>
+
+    <div class="ctl">
+      <div class="row"><label for="p-speed">Top speed</label><output id="o-speed"></output></div>
+      <input type="range" id="p-speed" min="100" max="1200" step="10">
+      <div class="range"><span>100 px/s</span><span>1200 px/s</span></div>
+      <small>Default follows screen width: 50% of width per second, kept within 300–560 px/s.</small>
+    </div>
+
+    <div class="ctl">
+      <div class="row"><label for="p-ramp">Ramp duration</label><output id="o-ramp"></output></div>
+      <input type="range" id="p-ramp" min="0" max="600" step="0.25">
+      <div class="range"><span>0 ms (instant)</span><span>600 ms</span></div>
+      <small>Time to reach top speed. Stopping takes ⅔ as long, as in the original (start 160/s, stop 240/s).</small>
+    </div>
+
+    <div class="ctl">
+      <label for="p-curve">Motion curve</label>
+      <select id="p-curve">
+        <option value="linear">Linear</option>
+        <option value="easeIn">Ease In</option>
+        <option value="easeOut">Ease Out (original)</option>
+        <option value="easeInOut">Ease In-Out</option>
+        <option value="spring">Spring / Bounce</option>
+      </select>
+      <small>Shape of the speed change during the ramp. Spring overshoots the target speed, then settles.</small>
+    </div>
+
+    <div class="ctl">
+      <div class="row"><label for="p-delay">Input delay</label><output id="o-delay"></output></div>
+      <input type="range" id="p-delay" min="0" max="500" step="5">
+      <div class="range"><span>0 ms</span><span>500 ms</span></div>
+      <small>Wait between pressing an arrow and the circle starting to move.</small>
+    </div>
+
+    <div class="ctl">
+      <div class="row"><label for="p-lean">Lean amplitude</label><output id="o-lean"></output></div>
+      <input type="range" id="p-lean" min="0" max="30" step="0.01">
+      <div class="range"><span>0°</span><span>30°</span></div>
+      <small>How far the top of the circle tilts into the direction of travel at top speed.</small>
+    </div>
+
+    <div class="ctl">
+      <div class="row"><label for="p-snap">Stop threshold</label><output id="o-snap"></output></div>
+      <input type="range" id="p-snap" min="0" max="150" step="1">
+      <div class="range"><span>0 px/s</span><span>150 px/s</span></div>
+      <small>After release, once speed falls below this, the circle stops dead.</small>
+    </div>
+
+    <div class="ctl">
+      <div class="row"><label for="p-fx">Feedback intensity</label><output id="o-fx"></output></div>
+      <input type="range" id="p-fx" min="0" max="200" step="5">
+      <div class="range"><span>0% (none)</span><span>200%</span></div>
+      <small>Strength of the squash/stretch while steering (100% = 8% wider, 4% shorter at top speed).</small>
+    </div>
+
+    <div class="actions">
+      <button type="button" id="b-state">Reset state</button>
+      <button type="button" id="b-defaults">Restore defaults</button>
+      <button type="button" id="b-copy">Copy as prompt</button>
+    </div>
+    <p class="status" id="status" aria-live="polite"></p>
+  </div>
+</details>
+
+<script>
+(function () {
+  var canvas = document.getElementById('c');
+  var ctx = canvas.getContext('2d');
+  var keysEl = document.getElementById('keys');
+  var resetBtn = document.getElementById('reset');
+  var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /* ---------- Player art: the attached token SVG ---------- */
+  var TOKEN_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">' +
+    '<circle cx="100" cy="100" r="78" fill="#bdbdbd" stroke="#6f6f6f" stroke-width="4"/></svg>';
+  var img = new Image();
+  var imgReady = false;
+  img.onload = function () { imgReady = true; };
+  img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(TOKEN_SVG);
+
+  /* ---------- Theme colors ---------- */
+  var C = { platform: '#a3a3a3', proj: '#3a3a3a', ring: '#6b6b6b' };
+  function readColors() {
+    var cs = getComputedStyle(document.documentElement);
+    C.platform = cs.getPropertyValue('--platform').trim() || C.platform;
+    C.proj = cs.getPropertyValue('--proj').trim() || C.proj;
+    C.ring = cs.getPropertyValue('--ring').trim() || C.ring;
+  }
+  try {
+    new MutationObserver(readColors).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    var mq = window.matchMedia('(prefers-color-scheme: dark)');
+    if (mq.addEventListener) mq.addEventListener('change', readColors);
+  } catch (e) {}
+  readColors();
+
+  function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+
+  /* ---------- Steering parameters (driven by the Behavior Controls panel) ---------- */
+  // Defaults reproduce the original study exactly.
+  var DEFAULTS = {
+    speed: null,                                   // px/s; null = auto: clamp(W * 0.5, 300, 560)
+    ramp: 18.75,                                   // ms to reach top speed (3 time constants of the original 160/s)
+    curve: 'easeOut',                              // easeOut = the original exponential approach
+    delay: 0,                                      // ms before a held arrow starts steering
+    lean: Math.atan(0.14) * 180 / Math.PI,         // deg; the original skew factor 0.14
+    snap: 24,                                      // px/s; snap to a dead stop below this after release
+    fx: 100                                        // % of the original move squash/stretch (0.08 / 0.04)
+  };
+  var P = {};
+  function restoreParams() { for (var k in DEFAULTS) P[k] = DEFAULTS[k]; }
+  restoreParams();
+  function autoSpeed() { return clamp(W * 0.5, 300, 560); }
+  function topSpeed() { return P.speed == null ? autoSpeed() : P.speed; }
+
+  var EASE = {
+    linear: function (t) { return t; },
+    easeIn: function (t) { return t * t * t; },
+    easeInOut: function (t) { return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; }
+  };
+
+  /* ---------- Geometry ---------- */
+  var W = 0, H = 0, DPR = 1, playH = 0, R = 24, s = 120, THICK = 14, gy = 0;
+  var g = 3000, jumpV = 900, speed = 400;
+  var plats = [];
+
+  function layout() {
+    DPR = Math.min(window.devicePixelRatio || 1, 2);
+    W = window.innerWidth;
+    H = window.innerHeight;
+    canvas.width = Math.round(W * DPR);
+    canvas.height = Math.round(H * DPR);
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+
+    var kr = keysEl.getBoundingClientRect();
+    playH = Math.max(200, kr.top - 14);
+    R = clamp(Math.min(W, playH) * 0.062, 18, 38);
+    s = Math.max(R * 2.8, Math.min(playH * 0.2, 150));
+    gy = playH - THICK;
+    g = Math.max(1800, playH * 5);
+    jumpV = Math.sqrt(2 * g * s * 1.35);
+    speed = topSpeed();
+
+    var minW = R * 4.6;
+    plats = [
+      { x: 0, y: gy, w: W, h: THICK },
+      { x: W * 0.06, y: gy - s, w: Math.max(W * 0.22, minW), h: THICK },
+      { x: W * 0.66, y: gy - s * 1.9, w: Math.max(W * 0.24, minW), h: THICK },
+      { x: W * 0.2, y: gy - s * 2.8, w: Math.max(W * 0.22, minW), h: THICK }
+    ];
+    plats.forEach(function (p) { if (p.x + p.w > W) p.x = Math.max(0, W - p.w); });
+  }
+
+  /* ---------- State ---------- */
+  var px = 0, py = 0, vx = 0, vy = 0, grounded = true, coyote = 0, jumpBuf = 0;
+  var sq = 0, sqv = 0;                 // squash spring: + squash (recoil, landing), - stretch (takeoff)
+  var shots = [];
+  var rings = [];
+  var down = {};
+  var lean = 0;                        // smoothed horizontal lean, -1 to 1
+  var rc = 0, rcv = 0;                 // recoil offset spring (airborne shots push the circle down)
+  var lastFire = 0;
+  var pressedAt = {};                  // performance.now() of each arrow press, for the input delay
+  var ramp = { to: 0, from: 0, t: 0, dur: 0, sv: 0 };   // current velocity ramp toward the target speed
+  var dirty = false;
+  var inited = false;
+
+  function resetPlayer() {
+    px = W / 2;
+    py = gy - R;
+    vx = 0; vy = 0;
+    grounded = true; coyote = 0.07; jumpBuf = 0;
+    sq = 0; sqv = 0; lean = 0; rc = 0; rcv = 0;
+    ramp.to = 0; ramp.from = 0; ramp.t = 0; ramp.dur = 0; ramp.sv = 0;
+    shots = [];
+    rings = [];
+  }
+
+  var prevPlayH = 0;
+  function relayout() {
+    var fx = inited ? px / (W || 1) : 0.5;
+    var fy = inited ? py / (prevPlayH || 1) : 0;
+    layout();
+    if (!inited) { resetPlayer(); inited = true; }
+    else {
+      px = clamp(fx * W, R, W - R);
+      py = fy * playH;
+      if (py + R > gy) { py = gy - R; vy = 0; }
+      grounded = false;
+    }
+    prevPlayH = playH;
+  }
+  window.addEventListener('resize', relayout);
+  relayout();
+
+  /* ---------- Input ---------- */
+  var keyEls = {};
+  keysEl.querySelectorAll('.key').forEach(function (k) { keyEls[k.getAttribute('data-code')] = k; });
+
+  function markDirty() {
+    if (!dirty) { dirty = true; resetBtn.disabled = false; }
+  }
+
+  function press(code) {
+    if (down[code]) return;
+    down[code] = true;
+    pressedAt[code] = performance.now();
+    if (keyEls[code]) keyEls[code].classList.add('down');
+    markDirty();
+    if (code === 'ArrowUp') jumpBuf = 0.1;
+    if (code === 'Space') fire();
+  }
+  function release(code) {
+    if (!down[code]) return;
+    down[code] = false;
+    if (keyEls[code]) keyEls[code].classList.remove('down');
+  }
+
+  var HANDLED = { ArrowLeft: 1, ArrowRight: 1, ArrowUp: 1, Space: 1 };
+  function inPanel(e) { return e.target && e.target.closest && e.target.closest('#panel'); }
+  window.addEventListener('keydown', function (e) {
+    if (!HANDLED[e.code] || inPanel(e)) return;
+    e.preventDefault();
+    if (e.repeat) return;
+    press(e.code);
+  });
+  window.addEventListener('keyup', function (e) {
+    if (!HANDLED[e.code]) return;
+    if (inPanel(e) && !down[e.code]) return;
+    e.preventDefault();
+    release(e.code);
+  });
+  window.addEventListener('blur', function () {
+    Object.keys(down).forEach(release);
+  });
+  window.addEventListener('pointerdown', function (e) {
+    if (inPanel(e)) return;
+    if (document.activeElement && document.activeElement.closest && document.activeElement.closest('#panel')) document.activeElement.blur();
+    window.focus();
+  });
+
+  Object.keys(keyEls).forEach(function (code) {
+    var k = keyEls[code];
+    k.addEventListener('pointerdown', function (e) {
+      e.preventDefault();
+      try { k.setPointerCapture(e.pointerId); } catch (err) {}
+      press(code);
+    });
+    function up() { release(code); }
+    k.addEventListener('pointerup', up);
+    k.addEventListener('pointercancel', up);
+    k.addEventListener('lostpointercapture', up);
+  });
+
+  resetBtn.addEventListener('click', function () {
+    resetPlayer();
+    dirty = false;
+    resetBtn.disabled = true;
+    resetBtn.blur();            // so a later Space press cannot activate it
+  });
+
+  /* ---------- Actions ---------- */
+  function fire() {
+    var now = performance.now();
+    if (now - lastFire < 70) return;
+    lastFire = now;
+    var pr = Math.max(5, R * 0.2);
+    shots.push({ x: px, y: py - R - pr, v: H * 2.8, burst: H * 2.8, cruise: H * 1.5, age: 0, r: pr });
+    sq = grounded ? 1.25 : 0.7; sqv = 0;                               // recoil: the body presses down
+    if (!grounded) { vy += R * 9; rc = 1; rcv = 0; }                    // small kick downward in the air
+    rings.push({ x: px, y: py - R, age: 0, dur: 0.16, from: R * 0.35, to: R * 0.95 });
+  }
+
+  /* ---------- Steering ramp ---------- */
+  // Moves vx toward `target` over the ramp duration using the chosen curve.
+  // Stopping uses 2/3 of the duration, matching the original 160/s start vs 240/s stop.
+  function steer(target, starting, dt) {
+    var dur = (P.ramp / 1000) * (starting ? 1 : 2 / 3);
+    if (target !== ramp.to) {
+      ramp.from = vx; ramp.to = target; ramp.t = 0; ramp.dur = dur;
+    }
+    if (dur <= 0) { vx = target; ramp.sv = 0; return; }
+    if (P.curve === 'easeOut') {
+      // exponential approach: about 95% of the way after `dur` (3 time constants)
+      vx += (target - vx) * (1 - Math.exp(-dt * 3 / dur));
+      return;
+    }
+    if (P.curve === 'spring') {
+      // under-damped spring on speed (damping ratio 0.3): overshoots, then settles
+      var w = 2 * Math.PI / (dur * 2), z = 0.3;
+      var h = 1 / 240, n = Math.max(1, Math.ceil(dt / h)), st = dt / n;
+      for (var i = 0; i < n; i++) {
+        ramp.sv += (w * w * (target - vx) - 2 * z * w * ramp.sv) * st;
+        vx += ramp.sv * st;
+      }
+      return;
+    }
+    ramp.t = Math.min(ramp.dur, ramp.t + dt);
+    var k = ramp.dur > 0 ? ramp.t / ramp.dur : 1;
+    vx = ramp.from + (ramp.to - ramp.from) * EASE[P.curve](k);
+  }
+
+  /* ---------- Update ---------- */
+  function update(dt) {
+    var now = performance.now();
+    function held(code) { return down[code] && now - pressedAt[code] >= P.delay; }
+    var dir = (held('ArrowRight') ? 1 : 0) - (held('ArrowLeft') ? 1 : 0);
+    steer(dir * speed, dir !== 0, dt);
+    if (!dir && Math.abs(vx) < P.snap) { vx = 0; ramp.sv = 0; ramp.from = 0; ramp.t = ramp.dur; }
+    lean += (vx / speed - lean) * (1 - Math.exp(-dt * 40));   // follows speed, so it drops away as the circle stops
+    px += vx * dt;
+    if (px < R) { px = R; vx = 0; }
+    if (px > W - R) { px = W - R; vx = 0; }
+
+    var prevBottom = py + R;
+    vy += g * dt;
+    py += vy * dt;
+
+    var wasGrounded = grounded;
+    grounded = false;
+    if (vy >= 0) {
+      var bottom = py + R;
+      for (var i = 0; i < plats.length; i++) {
+        var p = plats[i];
+        if (prevBottom <= p.y + 2 && bottom >= p.y &&
+            px + R * 0.7 > p.x && px - R * 0.7 < p.x + p.w) {
+          py = p.y - R;
+          vy = 0;
+          grounded = true;
+          break;
+        }
+      }
+    }
+    if (py + R > playH) { py = gy - R; vy = 0; grounded = true; }
+
+    if (grounded) {
+      coyote = 0.07;
+      if (!wasGrounded) { sq = Math.max(sq, 0.65); sqv = 0; }
+    } else {
+      coyote = Math.max(0, coyote - dt);
+    }
+
+    jumpBuf = Math.max(0, jumpBuf - dt);
+    if (jumpBuf > 0 && coyote > 0) {
+      vy = -jumpV;
+      grounded = false;
+      coyote = 0;
+      jumpBuf = 0;
+      sq = -0.95; sqv = 0;
+      rings.push({ x: px, y: py + R, age: 0, dur: 0.2, from: R * 0.3, to: R * 1.1 });
+    }
+
+    // squash spring, fixed small steps
+    var h = 1 / 240, n = Math.ceil(dt / h), sh = dt / n;
+    for (var j = 0; j < n; j++) {
+      sqv += (-700 * sq - 34 * sqv) * sh;
+      sq += sqv * sh;
+      rcv += (-1100 * rc - 66 * rcv) * sh;         // recoil offset: critically damped, no bounce
+      rc += rcv * sh;
+    }
+
+    for (var a = shots.length - 1; a >= 0; a--) {
+      shots[a].age += dt;
+      // quick burst out of the muzzle, then a fast steady climb
+      shots[a].v = shots[a].cruise + (shots[a].burst - shots[a].cruise) * Math.exp(-shots[a].age * 16);
+      shots[a].y -= shots[a].v * dt;
+      if (shots[a].y + shots[a].r < 0) shots.splice(a, 1);     // gone once it leaves the canvas
+    }
+    for (var b = rings.length - 1; b >= 0; b--) {
+      rings[b].age += dt;
+      if (rings[b].age >= rings[b].dur) rings.splice(b, 1);
+    }
+  }
+
+  /* ---------- Draw ---------- */
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+
+    ctx.fillStyle = C.platform;
+    plats.forEach(function (p) { ctx.fillRect(p.x, p.y, p.w, p.h); });
+
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = C.ring;
+    rings.forEach(function (r) {
+      var t = r.age / r.dur;
+      ctx.globalAlpha = (1 - t) * (reduce ? 0.5 : 1);
+      ctx.beginPath();
+      ctx.arc(r.x, r.y, Math.max(0, r.from + (r.to - r.from) * t), 0, Math.PI * 2);
+      ctx.stroke();
+    });
+    ctx.globalAlpha = 1;
+
+    ctx.fillStyle = C.proj;
+    ctx.strokeStyle = C.proj;
+    ctx.lineCap = 'round';
+    shots.forEach(function (sh) {
+      var b = clamp((sh.v - sh.cruise) / (sh.burst - sh.cruise), 0, 1) * (reduce ? 0.5 : 1);
+      if (b > 0.02) {                                // short tail while the burst is fastest
+        ctx.globalAlpha = 0.35 * b;
+        ctx.lineWidth = sh.r * 1.3;
+        ctx.beginPath();
+        ctx.moveTo(sh.x, sh.y);
+        ctx.lineTo(sh.x, sh.y + sh.r * (2 + 7 * b));
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+      }
+      ctx.beginPath();
+      ctx.ellipse(sh.x, sh.y, sh.r * (1 - 0.12 * b), sh.r * (1 + 0.35 * b), 0, 0, Math.PI * 2);
+      ctx.fill();
+    });
+
+    // player, squashed and stretched from the feet
+    var q = reduce ? sq * 0.4 : sq;
+    var move = Math.min(1, Math.abs(lean));
+    var air = grounded ? 0 : clamp(-vy / jumpV, -1, 1) * 0.05;
+    var fxk = P.fx / 100;
+    var sy = (1 - 0.2 * q) * (1 - 0.04 * fxk * move) * (1 + air);
+    var sx = (1 + 0.14 * q) * (1 + 0.08 * fxk * move) * (1 - air * 0.6);
+    var skew = reduce ? 0 : -clamp(lean, -1.5, 1.5) * Math.tan(P.lean * Math.PI / 180);   // top leans into the direction of travel
+    var dip = q > 0 ? q * R * 0.06 : 0;
+    var S = R * 2.5;                               // token box; the drawn circle fills 80% of it
+
+    ctx.save();
+    ctx.translate(px, py + R + dip + rc * R * 0.16);
+    ctx.transform(1, 0, skew, 1, 0, 0);
+    ctx.scale(sx, sy);
+    if (imgReady) {
+      ctx.drawImage(img, -S / 2, -R - S / 2, S, S);
+    } else {
+      ctx.beginPath();
+      ctx.arc(0, -R, R * 0.975, 0, Math.PI * 2);
+      ctx.fillStyle = '#bdbdbd';
+      ctx.fill();
+      ctx.strokeStyle = '#6f6f6f';
+      ctx.lineWidth = R * 0.05;
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  /* ---------- Behavior Controls panel ---------- */
+  var ui = {
+    speed: document.getElementById('p-speed'),
+    ramp: document.getElementById('p-ramp'),
+    curve: document.getElementById('p-curve'),
+    delay: document.getElementById('p-delay'),
+    lean: document.getElementById('p-lean'),
+    snap: document.getElementById('p-snap'),
+    fx: document.getElementById('p-fx')
+  };
+  var out = {
+    speed: document.getElementById('o-speed'),
+    ramp: document.getElementById('o-ramp'),
+    delay: document.getElementById('o-delay'),
+    lean: document.getElementById('o-lean'),
+    snap: document.getElementById('o-snap'),
+    fx: document.getElementById('o-fx')
+  };
+  var statusEl = document.getElementById('status');
+  function fmt(n, d) { return (+n).toFixed(d).replace(/\.?0+$/, ''); }
+  function label(k) {
+    switch (k) {
+      case 'speed': return Math.round(topSpeed()) + ' px/s' + (P.speed == null ? ' (auto)' : '');
+      case 'ramp': return P.ramp === 0 ? 'instant' : fmt(P.ramp, 2) + ' ms';
+      case 'delay': return P.delay + ' ms';
+      case 'lean': return fmt(P.lean, 1) + '°';
+      case 'snap': return P.snap + ' px/s';
+      case 'fx': return P.fx + '%';
+    }
+  }
+  function syncUI() {
+    ui.speed.value = Math.round(topSpeed());
+    ui.ramp.value = P.ramp;
+    ui.curve.value = P.curve;
+    ui.delay.value = P.delay;
+    ui.lean.value = P.lean;
+    ui.snap.value = P.snap;
+    ui.fx.value = P.fx;
+    Object.keys(out).forEach(function (k) { out[k].textContent = label(k); });
+  }
+  Object.keys(ui).forEach(function (k) {
+    ui[k].addEventListener('input', function () {
+      P[k] = k === 'curve' ? ui[k].value : parseFloat(ui[k].value);
+      if (k === 'speed') speed = topSpeed();
+      if (k === 'curve') { ramp.sv = 0; ramp.from = vx; ramp.t = 0; }
+      if (out[k]) out[k].textContent = label(k);
+      statusEl.textContent = '';
+    });
+  });
+  window.addEventListener('resize', syncUI);
+  syncUI();
+
+  document.getElementById('b-state').addEventListener('click', function () {
+    resetPlayer();
+    Object.keys(down).forEach(release);
+    dirty = false;
+    resetBtn.disabled = true;
+    statusEl.textContent = 'State reset.';
+  });
+  document.getElementById('b-defaults').addEventListener('click', function () {
+    restoreParams();
+    speed = topSpeed();
+    syncUI();
+    statusEl.textContent = 'Defaults restored.';
+  });
+
+  var CURVE_NAMES = { linear: 'Linear', easeIn: 'Ease In', easeOut: 'Ease Out', easeInOut: 'Ease In-Out', spring: 'Spring / Bounce' };
+  function promptText() {
+    return [
+      'In the Steer + Fire study (steer-fire.html), set the steering behavior to these values:',
+      '- Top speed: ' + Math.round(topSpeed()) + ' px/s' + (P.speed == null ? ' (auto: clamp(screen width x 0.5, 300, 560))' : ''),
+      '- Ramp duration: ' + fmt(P.ramp, 2) + ' ms to reach top speed (stopping takes 2/3 of that)',
+      '- Motion curve: ' + CURVE_NAMES[P.curve],
+      '- Input delay: ' + P.delay + ' ms before a held arrow starts steering',
+      '- Lean amplitude: ' + fmt(P.lean, 1) + ' deg tilt into the direction of travel at top speed',
+      '- Stop threshold: ' + P.snap + ' px/s (snap to a dead stop below this after release)',
+      '- Feedback intensity: ' + P.fx + '% of the original move squash/stretch (100% = 8% wider, 4% shorter)',
+      'Keep everything else (jump, fire, platforms, reduced-motion handling) unchanged.'
+    ].join('\n');
+  }
+  document.getElementById('b-copy').addEventListener('click', function () {
+    var text = promptText();
+    function done(ok) { statusEl.textContent = ok ? 'Copied to clipboard.' : 'Copy failed. Select and copy the text manually.'; }
+    function fallback() {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('readonly', '');
+      ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      var ok = false;
+      try { ok = document.execCommand('copy'); } catch (err) {}
+      ta.remove();
+      done(ok);
+    }
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(function () { done(true); }, fallback);
+    } else fallback();
+  });
+
+  var last = performance.now();
+  function frame(now) {
+    var dt = clamp((now - last) / 1000, 0, 0.033);
+    last = now;
+    update(dt);
+    draw();
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
+
+</body></html>

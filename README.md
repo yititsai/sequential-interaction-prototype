@@ -18,6 +18,12 @@ Each step unlocks only after the previous one succeeds:
 
 Ending: the monster arrives, a final ripple leaves it, and "The monster made it." appears with a **Start over** button that returns to the dormant monster.
 
+### Steer + Fire with Behavior Controls
+`docs/steer-fire.html` (live at https://yititsai.github.io/sequential-interaction-prototype/steer-fire.html) is the
+Steer + Fire study with a collapsible **Behavior Controls · Steering** panel: top speed, ramp duration, motion curve
+(Linear, Ease In, Ease Out, Ease In-Out, Spring/Bounce), input delay, lean amplitude, stop threshold and feedback
+intensity, plus Reset state, Restore defaults and Copy as prompt. Defaults match the original study.
+
 ### Files
 Plain HTML/CSS/JS with no build step; `/docs` is both the source and the published site.
 
