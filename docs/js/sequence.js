@@ -110,8 +110,9 @@
   /* ---------- Loop ---------- */
   var last = performance.now();
   function frame(now) {
-    var dt = Math.min((now - last) / 1000, 0.033);
+    var dt = S.clamp((now - last) / 1000, 0, 0.033);
     last = now;
+    S.time += dt;
     var ctx = S.ctx;
     ctx.clearRect(0, 0, S.W, S.H);
 
@@ -140,6 +141,7 @@
       cur.update(dt);
       cur.drawScene(1);
       cur.drawMonster();
+      if (cur.drawCues) cur.drawCues(dt, phase === 'play');
       S.updateRipples(dt);
       S.drawRipples();
 

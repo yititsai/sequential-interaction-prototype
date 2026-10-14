@@ -176,6 +176,28 @@
     S.drawMonster({ x: rx, y: cy, box: box, sx: sx, sy: sy, rot: rot });
   };
 
+  // Wordless hint: chevrons march along the floor from the monster toward the
+  // mark, and an arrow bounces above the mark. The trail fades once it's there.
+  var trailA = 0, markA = 0;
+  stage.drawCues = function (dt, live) {
+    var far = Math.abs(x - markX) > Math.max(D * 0.35, 30);
+    trailA = S.fadeCue(trailA, live && !stage.done && far, dt);
+    markA = S.fadeCue(markA, live && !stage.done, dt);
+    var s = Math.max(7, D * 0.05);
+    var dir = markX > x ? 1 : -1;
+    var x0 = x + dir * shW * 0.55, x1 = markX - dir * shW * 0.7;
+    if ((x1 - x0) * dir > s * 2) {
+      var n = 3, phase = S.reduce ? 0 : (S.time * 1.2) % 1;
+      for (var i = 0; i < n; i++) {
+        var f = (i + 0.5) / n;
+        // brightest chevron travels toward the mark
+        var glow = S.reduce ? 0.7 : 0.35 + 0.65 * Math.max(0, 1 - Math.abs(((f - phase + 1) % 1) - 0.5) * 3);
+        S.chevron(S.lerp(x0, x1, f), groundY, dir > 0 ? 0 : Math.PI, s, trailA * glow, 2.5);
+      }
+    }
+    S.chevron(markX, groundY - shH - 14 - S.nudge() * 12, Math.PI / 2, s, markA * 0.8, 2.5);
+  };
+
   S.stages = S.stages || {};
   S.stages.glide = stage;
 })();

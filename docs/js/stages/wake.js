@@ -164,6 +164,19 @@
     });
   };
 
+  // Wordless hint: an arrow bouncing down onto the monster and a tap ring on
+  // its body, shown until the first press.
+  var cueA = 0;
+  stage.drawCues = function (dt, live) {
+    cueA = S.fadeCue(cueA, live && !stage.started && !awake, dt);
+    var u = box / 400;
+    var top = cy + (57.7 - B.wakeOy) * u * sy;
+    var s = Math.max(9, box * 0.035);
+    S.chevron(cx, top - 18 - S.nudge() * 14, Math.PI / 2, s, cueA * 0.8, 2.5);
+    var c = { x: cx + (B.cx - B.wakeOx) * u, y: cy + (B.cy - B.wakeOy) * u };
+    S.pressCue(c.x, c.y, Math.max(14, box * 0.06), cueA * 0.7);
+  };
+
   S.stages = S.stages || {};
   S.stages.wake = stage;
 })();

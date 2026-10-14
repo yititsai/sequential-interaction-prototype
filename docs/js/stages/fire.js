@@ -101,6 +101,7 @@
   stage.activate = function () { active = true; };
   stage.leave = function () {
     active = false;
+    setKeyCues({});
     keysEl.classList.remove('show');
     Object.keys(down).forEach(release);
     setTimeout(function () { if (!active && !keysEl.classList.contains('show')) keysEl.hidden = true; }, 650);
@@ -334,6 +335,56 @@
       x: px, y: py + R + dip + rc * R * 0.16, box: boxSize(),
       ox: B.cx, oy: B.feet, sx: sx, sy: sy, skew: skew
     });
+  };
+
+  /* ---------- Wordless hints ---------- */
+  // Works out the next useful key from where the monster is, then shows it:
+  // an arrow bouncing over the next bar (or the target), a small arrow at the
+  // monster for the move/jump/fire, and a pulse on the matching key cap.
+  var cueA = 0, cueKeys = '';
+  function setKeyCues(want) {
+    var sig = Object.keys(want).sort().join(',');
+    if (sig === cueKeys) return;
+    cueKeys = sig;
+    Object.keys(keyEls).forEach(function (c) { keyEls[c].classList.toggle('cue', !!want[c]); });
+  }
+  stage.drawCues = function (dt, live) {
+    var show = live && active && !stage.done;
+    cueA = S.fadeCue(cueA, show, dt);
+    if (!show) { setKeyCues({}); if (cueA < 0.02) return; }
+
+    var want = {};
+    var s = Math.max(7, R * 0.3);
+    var bob = S.nudge();
+    var goalX, goalY;
+    if (tgt.lit) {
+      goalX = tgt.x; goalY = tgt.y - tgt.r - 10;
+      if (Math.abs(px - tgt.x) > tgt.r * 0.6) {
+        want[tgt.x > px ? 'ArrowRight' : 'ArrowLeft'] = 1;
+      } else {
+        want.Space = 1;
+        S.arrow(px, py - R * 1.9, tgt.x, tgt.y + tgt.r + 8, cueA * 0.9, s);
+      }
+    } else {
+      var next = plats[Math.min(3, onPlat + 1)];
+      var here = plats[onPlat];
+      goalX = next.x + next.w / 2; goalY = next.y - R * 2.2;
+      var over = px + R * 0.5 > next.x && px - R * 0.5 < next.x + next.w;
+      var dir = goalX > px ? 1 : -1;
+      var atEdge = onPlat > 0 && (dir > 0 ? px > here.x + here.w - R * 1.2 : px < here.x + R * 1.2);
+      if (!over) want[dir > 0 ? 'ArrowRight' : 'ArrowLeft'] = 1;
+      if (grounded && (over || atEdge)) want.ArrowUp = 1;
+    }
+    setKeyCues(show ? want : {});
+
+    // arrow bouncing down onto the next goal
+    S.chevron(goalX, goalY - 10 - bob * 10, Math.PI / 2, s, cueA * 0.8, 2.5);
+    // arrows at the monster for the suggested move / jump
+    if (want.ArrowRight || want.ArrowLeft) {
+      var d = want.ArrowRight ? 1 : -1;
+      S.chevron(px + d * (R * 1.6 + bob * 8), py, d > 0 ? 0 : Math.PI, s * 0.8, cueA * 0.7, 2.5);
+    }
+    if (want.ArrowUp) S.chevron(px, py - R * 1.7 - bob * 8, -Math.PI / 2, s * 0.8, cueA * 0.7, 2.5);
   };
 
   S.stages = S.stages || {};

@@ -286,6 +286,22 @@
     }
   };
 
+  // Wordless hint: "press and hold" rings fill around the two touch markers,
+  // and a dashed arrow climbs from the monster onto the upper platform.
+  // Hidden while charging or flying; returns if a charge drains away.
+  var cueA = 0;
+  stage.drawCues = function (dt, live) {
+    var want = live && !stage.done && state === 'idle' && idx === 0 && charge < 0.02 && contact < 0.2;
+    cueA = S.fadeCue(cueA, want, dt);
+    if (cueA < 0.02) return;
+    var mx = W0 * 1.05, mr = W0 * 0.16;
+    S.holdCue(cx - mx, markY, mr * 1.9, cueA * 0.75);
+    S.holdCue(cx + mx, markY, mr * 1.9, cueA * 0.75);
+    var s = Math.max(8, W0 * 0.08);
+    var lift = S.nudge(1.3) * 10;
+    S.arrow(cx, lowTop - h0 - 18, cx, upTop - h0 * 0.35 - lift, cueA * 0.85, s);
+  };
+
   S.stages = S.stages || {};
   S.stages.burst = stage;
 })();

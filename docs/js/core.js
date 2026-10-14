@@ -205,6 +205,96 @@
     ctx.restore();
   };
 
+  /* ---------- Visual cues (wordless hints) ---------- */
+  // Seconds since load; drives the looping cue animations.
+  Seq.time = 0;
+  // Eases a cue's opacity toward 1 (wanted) or 0, so cues fade in and out.
+  Seq.fadeCue = function (a, want, dt) {
+    return a + ((want ? 1 : 0) - a) * (1 - Math.exp(-dt * (want ? 4 : 8)));
+  };
+  // A soft bounce 0..1 used to nudge arrows toward their target (still when reduced motion is on).
+  Seq.nudge = function (period) {
+    return Seq.reduce ? 0.5 : 0.5 - 0.5 * Math.cos(Seq.time * Math.PI * 2 / (period || 1.1));
+  };
+  // Open chevron pointing along `angle` (radians, 0 = right, -PI/2 = up), tip at (x, y).
+  Seq.chevron = function (x, y, angle, size, alpha, width) {
+    if (alpha <= 0.01) return;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.translate(x, y);
+    ctx.rotate(angle);
+    ctx.strokeStyle = C.mark;
+    ctx.lineWidth = width || 2.5;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    ctx.moveTo(-size, -size);
+    ctx.lineTo(0, 0);
+    ctx.lineTo(-size, size);
+    ctx.stroke();
+    ctx.restore();
+  };
+  // Dashed guide line with a chevron at its end, from (x1, y1) to (x2, y2).
+  Seq.arrow = function (x1, y1, x2, y2, alpha, size) {
+    if (alpha <= 0.01) return;
+    var ang = Math.atan2(y2 - y1, x2 - x1);
+    ctx.save();
+    ctx.globalAlpha = alpha * 0.55;
+    ctx.strokeStyle = C.mark;
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([5, 6]);
+    ctx.lineDashOffset = Seq.reduce ? 0 : -Seq.time * 22;    // dashes drift toward the tip
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2 - Math.cos(ang) * 4, y2 - Math.sin(ang) * 4);
+    ctx.stroke();
+    ctx.restore();
+    Seq.chevron(x2, y2, ang, size || 8, alpha, 2.5);
+  };
+  // "Press here": a ring that closes onto a dot, looping.
+  Seq.pressCue = function (x, y, r, alpha) {
+    if (alpha <= 0.01) return;
+    var k = Seq.reduce ? 0.6 : (Seq.time % 1.4) / 1.4;
+    ctx.save();
+    ctx.strokeStyle = C.mark;
+    ctx.fillStyle = C.mark;
+    ctx.lineWidth = 2;
+    ctx.globalAlpha = alpha * (Seq.reduce ? 0.6 : Math.sin(Math.PI * Math.min(1, k * 1.25)));
+    ctx.beginPath();
+    ctx.arc(x, y, r * (1.8 - 1.2 * Math.min(1, k * 1.25)), 0, Math.PI * 2);
+    ctx.stroke();
+    var tap = k > 0.8 ? 1 - (k - 0.8) / 0.2 : Math.min(1, k * 1.25);
+    ctx.globalAlpha = alpha * (0.35 + 0.45 * tap);
+    ctx.beginPath();
+    ctx.arc(x, y, r * 0.45, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  };
+  // "Press and hold": a ring that fills clockwise, then restarts.
+  Seq.holdCue = function (x, y, r, alpha) {
+    if (alpha <= 0.01) return;
+    var k = Seq.reduce ? 0.75 : Math.min(1, (Seq.time % 1.8) / 1.4);
+    ctx.save();
+    ctx.strokeStyle = C.mark;
+    ctx.lineCap = 'round';
+    ctx.globalAlpha = alpha * 0.3;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.globalAlpha = alpha * 0.9;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(x, y, r, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * k);
+    ctx.stroke();
+    ctx.fillStyle = C.mark;
+    ctx.globalAlpha = alpha * 0.6;
+    ctx.beginPath();
+    ctx.arc(x, y, r * 0.38, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  };
+
   /* ---------- Hint + live region ---------- */
   var hintEl = document.getElementById('hint');
   var liveEl = document.getElementById('live');
