@@ -7,30 +7,23 @@ https://yititsai.github.io/sequential-interaction-prototype/
 GitHub Pages publishes from the `main` branch, `/docs` folder
 (Settings → Pages → Deploy from a branch → `main` / `/docs`).
 
-## Monster's Journey — sequence prototype
-One continuous, linear interaction built from the four studies in `interaction-studies.zip`.
-Each step unlocks only after the previous one succeeds:
+## Monster Mayhem with the Monster's Journey tutorial
+`docs/index.html` is the full **Monster Mayhem** game with the four interaction studies played first as a tutorial.
+Each step unlocks only after the previous one succeeds, and then the original game starts directly.
 
-1. **Wake** (Wake the Monster) — press and release the dormant monster (or Space/Enter). It wakes and sends out a ripple.
-2. **Glide** (Glide to Steer) — move the pointer left/right (or arrow keys) to float the monster over the mark on the floor and hold it there for 1 s.
-3. **Steer + Fire** (Steer + Fire) — arrow keys or on-screen keys to move and jump, Space to fire. Climb to the top bar to light the target, then hit it.
-4. **Burst** (Charge + Burst) — hold two fingers, the mouse button, or Space for 1 s to charge and burst onto the upper platform.
+1. **Wake the Monster** (spongy): click the sleeping monster on the title screen. It squishes, rebounds with an overshoot and sends out a ripple.
+2. **Steer + Fire** (snappy): use the real game controls in a practice area: ← →, ↑ to jump, Space to attack. Use each one and hit the practice target.
+3. **Glide to Steer** (light): grab the wings to start Flying Mode. Arrow keys switch off and the mouse steers with the glide study's spring and lean. Fly through ring 1 (right), ring 2 (left), then land on the checkpoint.
+4. **Charge + Burst** (springy): hold the mouse button (or two fingers on a touchscreen). The monster swells, trembles and bursts up to the EXIT. Releasing early cancels the charge.
 
-Ending: the monster arrives, a final ripple leaves it, and "The monster made it." appears with a **Start over** button that returns to the dormant monster.
-
-### Steer + Fire with Behavior Controls
-`docs/steer-fire.html` (live at https://yititsai.github.io/sequential-interaction-prototype/steer-fire.html) is the
-Steer + Fire study with a collapsible **Behavior Controls · Steering** panel: top speed, ramp duration, motion curve
-(Linear, Ease In, Ease Out, Ease In-Out, Spring/Bounce), input delay, lean amplitude, stop threshold and feedback
-intensity, plus Reset state, Restore defaults and Copy as prompt. Defaults match the original study.
+After **TUTORIAL COMPLETE!** the original game begins at Section 1, with all of its levels, enemies, scoring, health, power-ups, Flying Mode, boost, sounds, game over/retry and win screen unchanged.
+Dying uses the game's normal retry. The **↺ Restart** button (top right) goes back to Tutorial Step 1; during the main game it asks first.
 
 ### Files
-Plain HTML/CSS/JS with no build step; `/docs` is both the source and the published site.
+- `docs/index.html`: the combined game (single file, like the original). The tutorial is the `TUTORIAL` section of the script.
+- `docs/journey/`: the earlier grayscale Monster's Journey sequence (https://yititsai.github.io/sequential-interaction-prototype/journey/)
+- `docs/steer-fire.html`: the Steer + Fire study with Behavior Controls
+- `source/`: the original uploads (`Monster Mayhem.html`, `Monsters Journey.zip`) kept for reference
+- `interaction-studies.zip`: the four original interaction studies
 
-- `docs/index.html` — page
-- `docs/css/style.css` — shared light/dark tokens, hint, key caps, ending
-- `docs/js/core.js` — canvas, theme colors, monster art, ripple
-- `docs/js/stages/*.js` — one file per study (wake, glide, fire, burst)
-- `docs/js/sequence.js` — linear sequencer, handoffs, input routing, ending/reset
-
-Run locally by opening `docs/index.html` in a browser.
+No build step. Open `docs/index.html` in a browser to run it locally.

@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>Monster's Journey</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <canvas id="c" aria-label="Monster's Journey. A dormant monster wakes, glides, climbs and bursts upward."></canvas>
+
+  <p class="hint" id="hint" aria-hidden="true"></p>
+
+  <!-- On-screen key caps from the Steer + Fire study; shown only during that stage -->
+  <div class="keys" id="keys" hidden>
+    <div class="cluster">
+      <div class="key" data-code="ArrowLeft" aria-hidden="true"><svg viewBox="0 0 20 20"><path d="M12 4l-6 6 6 6"/></svg></div>
+      <div class="key" data-code="ArrowUp" aria-hidden="true"><svg viewBox="0 0 20 20"><path d="M4 12l6-6 6 6"/></svg></div>
+      <div class="key" data-code="ArrowRight" aria-hidden="true"><svg viewBox="0 0 20 20"><path d="M8 4l6 6-6 6"/></svg></div>
+    </div>
+    <div class="key space" data-code="Space" aria-hidden="true"><svg viewBox="0 0 20 20"><path d="M3 7v5h14V7"/></svg></div>
+  </div>
+
+  <div class="ending" id="ending" hidden>
+    <p class="ending-line">The monster made it.</p>
+    <button class="restart" id="restart" type="button">Start over</button>
+  </div>
+
+  <p class="sr" id="live" aria-live="polite"></p>
+
+  <script src="js/core.js"></script>
+  <script src="js/stages/wake.js"></script>
+  <script src="js/stages/glide.js"></script>
+  <script src="js/stages/fire.js"></script>
+  <script src="js/stages/burst.js"></script>
+  <script src="js/sequence.js"></script>
+</body>
+</html>
