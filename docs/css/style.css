@@ -1,0 +1,190 @@
+/* Shared design tokens from the four studies (light / dark). */
+:root {
+  --bg: #f2f2f2;
+  --fg: #1d1d1d;
+  --muted: #6b6b6b;
+  --platform: #a3a3a3;
+  --proj: #3a3a3a;
+  --ring: #6b6b6b;
+  --mark: #1d1d1d;
+  --edge: #8a8a8a;
+  --edge-awake: #5c5c5c;
+  --edge-hover: #2a2a2a;
+  --ripple: #4d4d4d;
+  --shadow-a: .2;
+  --shadow-b: .08;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #1b1b1b;
+    --fg: #ececec;
+    --muted: #9a9a9a;
+    --platform: #585858;
+    --proj: #dcdcdc;
+    --ring: #bdbdbd;
+    --mark: #ececec;
+    --edge: #6b6b6b;
+    --edge-awake: #b5b5b5;
+    --edge-hover: #ffffff;
+    --ripple: #d0d0d0;
+    --shadow-a: .7;
+    --shadow-b: .3;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #1b1b1b;
+  --fg: #ececec;
+  --muted: #9a9a9a;
+  --platform: #585858;
+  --proj: #dcdcdc;
+  --ring: #bdbdbd;
+  --mark: #ececec;
+  --edge: #6b6b6b;
+  --edge-awake: #b5b5b5;
+  --edge-hover: #ffffff;
+  --ripple: #d0d0d0;
+  --shadow-a: .7;
+  --shadow-b: .3;
+  color-scheme: dark;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  overflow: hidden;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+canvas {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;
+}
+
+/* One quiet line per stage; fades once the stage is started. */
+.hint {
+  position: fixed;
+  left: 16px;
+  right: 16px;
+  top: calc(18px + env(safe-area-inset-top, 0px));
+  margin: 0;
+  text-align: center;
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--muted);
+  opacity: 0;
+  transition: opacity .6s ease;
+  pointer-events: none;
+}
+.hint.show { opacity: 1; }
+
+/* Key caps (Steer + Fire study) */
+.keys {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  padding-inline: 16px;
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  gap: 20px;
+  touch-action: none;
+  opacity: 0;
+  transition: opacity .6s ease;
+}
+.keys.show { opacity: 1; }
+.keys[hidden] { display: none; }
+.cluster { display: flex; gap: 8px; }
+.key {
+  width: 46px;
+  height: 46px;
+  display: grid;
+  place-items: center;
+  border: 1.5px solid var(--fg);
+  border-radius: 6px;
+  background: var(--bg);
+  box-shadow: 0 3px 0 var(--fg);
+  touch-action: none;
+  cursor: pointer;
+}
+.key.space { width: clamp(96px, 28vw, 150px); }
+.key svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: var(--fg);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+.key.down {
+  background: var(--fg);
+  transform: translateY(3px);
+  box-shadow: 0 0 0 var(--fg);
+}
+.key.down svg { stroke: var(--bg); }
+
+/* Ending */
+.ending {
+  position: fixed;
+  left: 16px;
+  right: 16px;
+  top: calc(22vh + env(safe-area-inset-top, 0px));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  opacity: 0;
+  transition: opacity 1.2s ease;
+}
+.ending.show { opacity: 1; }
+.ending[hidden] { display: none; }
+.ending-line {
+  margin: 0;
+  font-size: 20px;
+  letter-spacing: .01em;
+  text-align: center;
+}
+.restart {
+  min-height: 40px;
+  padding: 0 10px;
+  background: none;
+  border: 0;
+  font: inherit;
+  font-size: 14px;
+  color: var(--muted);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+  transition: color .2s ease;
+}
+.restart:hover { color: var(--fg); }
+.restart:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; color: var(--fg); }
+
+.sr {
+  position: absolute;
+  width: 1px; height: 1px;
+  margin: -1px; padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hint, .keys, .ending, .restart { transition-duration: .01s; }
+}
