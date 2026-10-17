@@ -57,6 +57,32 @@ canvas{touch-action:none;display:block;width:100%;height:100%;border-radius:14px
 }
 #restartAll:hover{border-color:#ffe14a;color:#ffe14a}
 #restartAll:focus-visible{outline:2px solid #ffe14a;outline-offset:2px}
+
+/* ===== REFINEMENT CONTROLS: design/debug tool layer, not part of the game ===== */
+#refine{position:fixed;left:12px;top:12px;z-index:50;max-height:calc(100vh - 24px);display:flex;flex-direction:column;
+  font:12px/1.35 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:#e6e6e6;letter-spacing:0;user-select:text;-webkit-user-select:text;touch-action:auto}
+#refTab{align-self:flex-start;padding:7px 11px;border-radius:6px;border:1px dashed #8a8a8a;background:#202020;color:#e6e6e6;
+  font:inherit;font-weight:700;letter-spacing:.06em;cursor:pointer}
+#refTab:hover{border-color:#5ab0ff;color:#fff}
+#refTab:focus-visible,#refine button:focus-visible,#refine input:focus-visible{outline:2px solid #5ab0ff;outline-offset:2px}
+#refBody{margin-top:6px;width:300px;max-width:calc(100vw - 24px);overflow:auto;background:#1b1b1b;border:1px solid #4a4a4a;border-radius:8px;
+  box-shadow:0 8px 28px rgba(0,0,0,.5);padding:10px 12px 12px}
+#refBody[hidden]{display:none}
+#refBody .note{margin:0 0 8px;color:#9a9a9a;font-size:11px}
+#refBody .presets{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:8px}
+#refBody button{font:inherit;color:#e6e6e6;background:#2a2a2a;border:1px solid #555;border-radius:5px;padding:6px 4px;cursor:pointer}
+#refBody button:hover{border-color:#5ab0ff}
+#refBody .presets button.on{background:#123a5c;border-color:#5ab0ff;color:#fff}
+#refBody details{border-top:1px solid #333;padding:6px 0 2px}
+#refBody summary{cursor:pointer;font-weight:700;color:#fff;padding:2px 0}
+#refBody summary span{color:#5ab0ff;font-weight:400}
+#refBody .ctl{margin:7px 0 0}
+#refBody .row{display:flex;justify-content:space-between;gap:8px}
+#refBody output{color:#5ab0ff;font-variant-numeric:tabular-nums;white-space:nowrap}
+#refBody input[type=range]{width:100%;margin:3px 0 0;accent-color:#5ab0ff}
+#refBody .ends{display:flex;justify-content:space-between;color:#7a7a7a;font-size:10px}
+#refBody .actions{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:10px;border-top:1px solid #333;padding-top:10px}
+#refBody .status{min-height:1.3em;margin:6px 0 0;color:#9a9a9a;font-size:11px}
 </style>
 </head>
 <body>
@@ -66,6 +92,24 @@ canvas{touch-action:none;display:block;width:100%;height:100%;border-radius:14px
   <div id="touch">
     <div class="grp"><button data-k="left">◀</button><button data-k="right">▶</button></div>
     <div class="grp"><button class="big" data-k="jump">JUMP</button><button class="big" data-k="fire">ZAP!</button></div>
+  </div>
+</div>
+
+<div id="refine" aria-label="Refinement controls (design tool)">
+  <button id="refTab" type="button" aria-expanded="false" aria-controls="refBody" title="Show / hide (` key)">⚙ REFINEMENT CONTROLS ▸</button>
+  <div id="refBody" hidden>
+    <p class="note">Design tool. Changes apply live. Tutorial order, completion rules and controls are unchanged.</p>
+    <div class="presets">
+      <button type="button" data-preset="subtle">V1 Subtle</button>
+      <button type="button" data-preset="balanced">V2 Balanced</button>
+      <button type="button" data-preset="exaggerated">V3 Exaggerated</button>
+    </div>
+    <div id="refGroups"></div>
+    <div class="actions">
+      <button type="button" id="refReset">Reset to Final Settings</button>
+      <button type="button" id="refCopy">Copy values</button>
+    </div>
+    <p class="status" id="refStatus" aria-live="polite"></p>
   </div>
 </div>
 
@@ -80,6 +124,20 @@ const FONT = "'Luckiest Guy','Arial Black',Impact,sans-serif";
 const rand = (a, b) => a + Math.random() * (b - a);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const lerp = (a, b, t) => a + (b - a) * t;
+/* ---------- refinement settings (live-tuned by the REFINEMENT CONTROLS panel) ----------
+   FINAL holds the shipped values; every behaviour reads from R, so FINAL reproduces the prototype exactly. */
+const FINAL = Object.freeze({
+  wakeSquash: 27,     // Wake: how far the body squashes on contact, % of its height (width bulges in proportion)
+  wakeOvershoot: 22.9,// Wake: peak overshoot of the rebound after release, % (22.9% = the original damping 7.6)
+  moveResponse: 16,   // Movement: acceleration rate on the ground, per second (half that in the air)
+  moveLean: 100,      // Movement: running lean (and stretch above 100%), % of final
+  flyEase: 100,       // Flying: mouse-follow softness, % (higher = floatier, softer follow)
+  flyBob: 100,        // Flying: floating bob and sway, % of final
+  chargeTime: 1.0,    // Charge: seconds to full charge in the tutorial (main-game boost scales with it: 0.9 s at 1.0)
+  chargeGrow: 45,     // Charge: extra size at full charge in the tutorial, % (main game scales with it: +50% at 45)
+  boost: 100          // Charge: burst / boost strength, % of final
+});
+const R = Object.assign({}, FINAL);
 function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
 const hex2rgb = h => [parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)];
 const mix = (a, b, t) => { const A=hex2rgb(a),B=hex2rgb(b); return `rgb(${A.map((v,i)=>Math.round(lerp(v,B[i],t))).join(',')})`; };
@@ -295,13 +353,16 @@ function press(k){
 }
 function release(k){ if (k in keys) keys[k] = false; }
 const KMAP = {ArrowLeft:'left',ArrowRight:'right',ArrowUp:'jump',Space:'fire'};
+const inRefine = e => !!(e.target && e.target.closest && e.target.closest('#refine'));
 window.addEventListener('keydown', e => {
+  if (e.code==='Backquote'){ e.preventDefault(); toggleRefine(); return; }
+  if (inRefine(e)) return;                      // typing in the refinement panel never moves the monster
   if (e.code==='KeyM'){ muted = !muted; return; }
   if (e.code==='ArrowDown'){ e.preventDefault(); return; }   // Down does nothing
   const k = KMAP[e.code]; if (!k) return;
   e.preventDefault(); if (e.repeat) return; press(k);
 });
-window.addEventListener('keyup', e => { const k = KMAP[e.code]; if (k){ e.preventDefault(); release(k); } });
+window.addEventListener('keyup', e => { const k = KMAP[e.code]; if (k){ if (inRefine(e) && !keys[k]) return; e.preventDefault(); release(k); } });
 window.addEventListener('blur', () => { keys.left = keys.right = keys.jump = false; touchIds.clear(); touchN = 0; mouseDown = false; if (state==='tutorial') tutBlur(); });
 document.querySelectorAll('#touch button').forEach(b => {
   const k = b.dataset.k;
@@ -318,6 +379,7 @@ window.addEventListener('mouseup', () => { mouseDown = false; });
 window.addEventListener('pointerup', pUp); window.addEventListener('pointercancel', pUp);
 window.addEventListener('pointermove', e => { const q = toGame(e); mouseX = q.x; mouseY = q.y; });
 cv.addEventListener('pointerdown', e => {
+  if (document.activeElement && document.activeElement.closest && document.activeElement.closest('#refine')) document.activeElement.blur();
   const q = toGame(e); mouseX = q.x; mouseY = q.y;
   if (state==='play' || (state==='tutorial' && tut && tut.step===4)){ if (e.pointerType==='touch') touchIds.add(e.pointerId); else mouseDown = true; }
   if (state==='tutorial'){ tutPointerDown(e,q); return; }
@@ -578,13 +640,14 @@ function updatePlayer(dt){
   if (fl){
     // FLYING: the mouse steers, keyboard left/right is ignored
     const tx = mouseX!=null ? clamp(mouseX,18,W-18) : P.x, d0 = tx-P.x;
-    P.vx = d0*5; P.x += d0*Math.min(1,5*dt);
+    const fr = 5*100/R.flyEase;                     // follow rate: lower = softer, floatier
+    P.vx = d0*fr; P.x += d0*Math.min(1,fr*dt);
     if (Math.abs(P.vx)>30) P.face = P.vx>0 ? 1 : -1;
-  } else P.vx += (dir*maxV - P.vx) * Math.min(1, (P.onGround?16:8)*dt);
+  } else P.vx += (dir*maxV - P.vx) * Math.min(1, (P.onGround?R.moveResponse:R.moveResponse/2)*dt);
   if (dir){ P.face = dir; hint.move = true; }
   P.buffer -= dt; P.coyote -= dt; P.atkCd -= dt; P.atk -= dt; P.inv -= dt; P.moodT -= dt; P.happyT -= dt;
   if (fl) P.vy = -FLY_SPEED;
-  else if (P.boostT>0){ const bf=P.boostT/BOOST_D; P.vy = -(250+(BOOST_V-250)*bf); }   // boost: fast burst that eases off
+  else if (P.boostT>0){ const bf=P.boostT/BOOST_D; P.vy = -(250+(BOOST_V*R.boost/100-250)*bf); }   // boost: fast burst that eases off
   else if (P.charging && !P.onGround){ P.vy = P.vy*Math.exp(-5*dt) + 260*dt; if (P.vy>140) P.vy = 140; }   // hover while charging in the air                                  // float upward on its own
   else {
     P.vy = Math.min(P.vy + (P.glide?600:1700)*dt, P.glide?115:950);   // glide = gentle float down after flying
@@ -625,7 +688,7 @@ function updatePlayer(dt){
     if (P.y > 0){ P.y = 0; P.vy = 0; P.onGround = true; P.ground = platforms[0]; if (P.glide) P.glide=false; }
   }
 
-  if (inp) P.target = (P.giant>0 ? 2.8 : 1) * (1 + .5*P.charge);      // grows while charging, back to normal after
+  if (inp) P.target = (P.giant>0 ? 2.8 : 1) * (1 + .5*(R.chargeGrow/45)*P.charge);      // grows while charging, back to normal after
   P.sq += (0 - P.sq) * Math.min(1, 14*dt);
   P.scv = (P.scv + (P.target - P.sc)*260*dt) * Math.exp(-7*dt);
   P.sc += P.scv*dt;
@@ -670,7 +733,7 @@ function updateCharge(dt, active){
   if (holding && P.boostCd>0 && P.boostT<=0 && !P.cdMsg){ P.cdMsg = true; addText('Recharging...',P.x,P.y-80*P.sc,{size:18,color:'#c8f3ff',life:.8}); }
   if (can){
     if (!P.charging){ P.charging = true; hint.boost = true; addText('Charging!',P.x,P.y-90*P.sc,{size:22,color:'#ffe14a',life:.9,pop:true}); }
-    P.charge = Math.min(1,P.charge+dt/CHARGE_T);
+    P.charge = Math.min(1,P.charge+dt/(CHARGE_T*R.chargeTime));
     P.buffer = 0;
     P.chargeFx -= dt;
     if (P.chargeFx<=0){
@@ -691,7 +754,7 @@ function updateCharge(dt, active){
 }
 function doBoost(){
   P.charging = false; P.charge = 0; P.chargeLock = true; P.boostT = BOOST_D; P.boostUses++;
-  P.vy = -BOOST_V; P.onGround = false; P.ground = null; P.coyote = 0; P.bouncing = true; P.glide = false; P.sq = -.45;
+  P.vy = -BOOST_V*R.boost/100; P.onGround = false; P.ground = null; P.coyote = 0; P.bouncing = true; P.glide = false; P.sq = -.45;
   shake(9); hitstop = .05; punch = .03; sfx('boost');
   addText('BOOST!',P.x,P.y-100*P.sc,{size:42,color:'#ffe14a',life:.9,vy:-60,pop:true});
   addP({type:'ring',x:P.x,y:P.y,size:130*P.sc,life:.4,color:'#ffe14a'});
@@ -1463,7 +1526,7 @@ function drawFlyPick(pk){
 
 function drawFlyGuide(){   // dashed line + target ring showing where the mouse is steering the monster
   if (mouseX==null) return;
-  const sy = P.y-24*P.sc-camY+Math.sin(time*4)*5, tx = clamp(mouseX,18,W-18);
+  const sy = P.y-24*P.sc-camY+Math.sin(time*4)*5*R.flyBob/100, tx = clamp(mouseX,18,W-18);
   ctx.save();
   ctx.strokeStyle='rgba(127,227,255,.55)'; ctx.lineWidth=3; ctx.setLineDash([8,8]); ctx.beginPath(); ctx.moveTo(P.x,sy); ctx.lineTo(tx,sy); ctx.stroke(); ctx.setLineDash([]);
   ctx.fillStyle='rgba(127,227,255,.25)'; ctx.strokeStyle='#7fe3ff'; ctx.lineWidth=3; circ(ctx,tx,sy,13+Math.sin(time*8)*2); ctx.fill(); ctx.stroke();
@@ -1589,13 +1652,16 @@ function drawPlayer(){
     py -= titleHover ? Math.abs(Math.sin(time*7))*16 : 0;
     sq += titleHover ? Math.sin(time*14)*.03 : 0;
   } else if (fly){
-    rot = clamp(P.vx/260,-.45,.45)*.8 + Math.sin(time*3)*.07;      // lean into the turn + sway
-    py += Math.sin(time*4)*5;                                        // gentle bob
-    sq += Math.sin(time*5)*.03;
+    const bk = R.flyBob/100;
+    rot = clamp(P.vx/260,-.45,.45)*.8 + Math.sin(time*3)*.07*bk;   // lean into the turn + sway
+    py += Math.sin(time*4)*5*bk;                                     // gentle bob
+    sq += Math.sin(time*5)*.03*bk;
   } else if (P.glide){
     rot = clamp(P.vx/300,-.3,.3) + Math.sin(time*3)*.08; py += Math.sin(time*5)*2;
   } else if ((state==='play' || state==='tutorial') && P.onGround){
-    rot = clamp(P.vx/228,-1,1)*.1;                                   // lean while running
+    const run = clamp(P.vx/228,-1,1), lk = R.moveLean/100;
+    rot = run*.1*lk;                                                 // lean while running
+    if (lk>1) sq -= Math.abs(run)*.05*(lk-1);                        // extra stretch when pushed past final
   }
   if (state==='win'){
     const t=clamp(winT/1.2,0,1), e=t*t;
@@ -1882,6 +1948,8 @@ let tut = null, tutPose = null, xfade = 0;
 // Charge + Burst geometry (study values, sized to the green monster)
 const TB = {HOLD:1.0, GROW:.45, g:3600, W0:48, h0:50, RISE:150, LOW:-480};
 
+// damping ratio that gives a spring the requested peak overshoot (%), relative to critical damping
+function dampingFor(os){ if (os<=.5) return 1; const l = Math.log(os/100); return -l/Math.sqrt(Math.PI*Math.PI+l*l); }
 function tutPlat(x,y,w,extra){ return Object.assign({type:'stone',x,y,w,h:16,bx:x,dx:0,sec:0,sp:1,ph:x*.013,amp:0,state:'idle',t:0,fy:0,squish:0},extra||{}); }
 function setTouch(on){ touchEl.classList.toggle('off', !on); }
 const easeRipple = (() => {           // cubic-bezier(.15,.6,.3,1), the Wake ripple's curve
@@ -1929,7 +1997,7 @@ function wakeRelease(){
   const w = tut.w; if (!w.pressed) return;
   if (w.q < .7 && !reduceMotion){ w.pending = true; return; }                 // a quick tap still squashes to 70%
   w.pending = false; w.pressed = false; w.id = null;
-  w.target = 0; w.k = 80; w.c = reduceMotion ? 2*Math.sqrt(80) : 7.6;        // soft rebound, one overshoot
+  w.target = 0; w.k = 80; w.c = reduceMotion ? 2*Math.sqrt(80) : 2*Math.sqrt(80)*dampingFor(R.wakeOvershoot);   // soft rebound, one overshoot (7.6 at the final 22.9%)
   tut.ripples.push({age:reduceMotion?0:-.14});
   sfx('bounce');
   if (!w.awake){
@@ -1948,7 +2016,7 @@ function tutWake(dt){
   const tp = w.awake ? 3.2 : 4.6, ta = reduceMotion ? 0 : (w.awake ? .038 : .03), ez = Math.min(1,dt*1.5);
   w.period += (tp-w.period)*ez; w.amp += (ta-w.amp)*ez; w.phase += dt*TAU/w.period;
   const br = Math.sin(w.phase)*w.amp*(1-Math.min(1,Math.abs(w.q)*1.5));
-  const pop = 1+Math.max(0,-w.q)*.1;
+  const pop = 1+Math.max(0,-w.q)*.1, sk = R.wakeSquash/27;
   P.scv = (P.scv + (P.target-P.sc)*260*dt)*Math.exp(-7*dt); P.sc += P.scv*dt;
   P.blinkT -= dt; if (P.blinkT<=0){ P.blink=.12; P.blinkT=rand(2,4); } P.blink -= dt; P.happyT -= dt;
   titleT += dt; titleNope = Math.max(0,titleNope-dt);
@@ -1957,7 +2025,7 @@ function tutWake(dt){
   if (mouseX!=null) P.face = mouseX<P.x ? -1 : 1;
   if (!w.awake){ tut.zT -= dt; if (tut.zT<=0){ tut.zT = 1.3; addText('z', P.x+34*P.sc*P.face, P.y-82*P.sc, {size:20+Math.random()*8,color:'#c58bff',life:1.6,vy:-35}); } }
   const mood = !w.awake ? 'sleep' : w.pressed ? 'surprised' : P.happyT>0 ? 'happy' : 'normal';
-  tutPose = {x:P.x+(titleNope>0?Math.sin(time*60)*3:0), y:P.y, s:P.sc, ex:(1+.16*w.q)*(1+br*.8)*pop, ey:(1-.27*w.q)*(1+br*1.2)*pop,
+  tutPose = {x:P.x+(titleNope>0?Math.sin(time*60)*3:0), y:P.y, s:P.sc, ex:(1+.16*sk*w.q)*(1+br*.8)*pop, ey:(1-.27*sk*w.q)*(1+br*1.2)*pop,
              mood, dim:1-w.mix, halo:!tut.next, shadow:true};
 }
 
@@ -2028,14 +2096,15 @@ function tutGlide(dt){
   // ---- flying: the glide study's springs, steered by the mouse x only ----
   const f = T.f;
   if (mouseX!=null) f.tx = clamp(mouseX,30,W-30);
-  const kx = 13, cx = reduceMotion ? 2*Math.sqrt(13) : 5.4, ka = 45, ca = reduceMotion ? 2*Math.sqrt(45) : 5.5;
+  const L = R.flyEase/100;                         // lightness: softer spring and a little more drift when higher
+  const kx = 13/L, cx = reduceMotion ? 2*Math.sqrt(kx) : 5.4/Math.pow(L,.8), ka = 45, ca = reduceMotion ? 2*Math.sqrt(45) : 5.5;
   const goal = T.gi<T.gates.length ? T.gates[T.gi] : {x:T.cp.x+T.cp.w/2, y:T.cp.y-24, cp:true};
   const aligned = Math.abs(f.x-goal.x) < (goal.cp ? 60 : 34);
   // rise toward the next ring only when lined up with it; otherwise hover just below
   const fy = goal.cp ? (aligned ? T.cp.y : T.cp.y+90) : goal.y+24+(aligned ? 0 : 100);
   const n = Math.max(1,Math.ceil(dt*240)), h = dt/n;
   for (let i=0;i<n;i++){
-    f.txs += (f.tx-f.txs)*(1-Math.exp(-h*(reduceMotion?20:7)));         // takes the jitter out of the cursor
+    f.txs += (f.tx-f.txs)*(1-Math.exp(-h*(reduceMotion?20:7/L)));         // takes the jitter out of the cursor
     f.vx += (-kx*(f.x-f.txs) - cx*f.vx)*h; f.x += f.vx*h;                // soft, floaty pull toward the pointer
     const lt = reduceMotion ? 0 : clamp(f.vx*.024,-18,18);
     f.av += (-ka*(f.ang-lt) - ca*f.av)*h; f.ang += f.av*h;               // lean swings gently into travel
@@ -2044,9 +2113,10 @@ function tutGlide(dt){
   const motion = clamp((Math.abs(f.vx)+Math.abs(f.tx-f.x)*3)/(W*.35),0,1);
   f.energy += (motion-f.energy)*(1-Math.exp(-dt*(motion>f.energy?6:.9)));
   f.bobPh += dt*TAU/(reduceMotion?5:3.8-.9*f.energy); f.swayPh += dt*TAU/5.6;
-  f.bob = (Math.sin(f.bobPh)+.18*Math.sin(f.bobPh*2+1.2))*(reduceMotion?3:9)*(1-.4*f.energy);
-  f.sway = reduceMotion ? 0 : Math.sin(f.swayPh)*6*(1-.7*f.energy);
-  const idleLean = reduceMotion ? 0 : Math.cos(f.swayPh)*2.4*(1-.7*f.energy);
+  const bk = R.flyBob/100;
+  f.bob = (Math.sin(f.bobPh)+.18*Math.sin(f.bobPh*2+1.2))*(reduceMotion?3:9*bk)*(1-.4*f.energy);
+  f.sway = reduceMotion ? 0 : Math.sin(f.swayPh)*6*bk*(1-.7*f.energy);
+  const idleLean = reduceMotion ? 0 : Math.cos(f.swayPh)*2.4*bk*(1-.7*f.energy);
   P.x = f.x + f.sway; P.y = f.y; P.vx = f.vx; if (Math.abs(f.vx)>30) P.face = f.vx>0 ? 1 : -1;
   T.wing = Math.min(1,T.wing+dt*6);
   P.blinkT -= dt; if (P.blinkT<=0){ P.blink=.12; P.blinkT=rand(2,4); } P.blink -= dt;
@@ -2105,7 +2175,7 @@ function tutBurst(dt){
   if (c.state==='idle'){
     if (active){
       if (!c.wasActive) addText('Charging!', W/2, c.py-95, {size:22,color:'#ffe14a',life:.9,pop:true});
-      c.charge = Math.min(1, c.charge+dt/TB.HOLD);
+      c.charge = Math.min(1, c.charge+dt/R.chargeTime);
       c.fxT -= dt;
       if (c.fxT<=0){ c.fxT=.1; P.charge=c.charge; sfx('charge'); addP({type:'ringin',x:W/2,y:c.py-26,size:(90+30*c.charge),life:.3,color:c.charge>.7?'#fff':'#ffb02e'}); dust(W/2,c.py,1,40*c.charge+10); }
       if (c.charge>=1) tutLaunch();
@@ -2126,7 +2196,7 @@ function tutBurst(dt){
     if (c.state==='flight' && c.py>TB.LOW+4) tutLand(0);
     if (c.state==='flight' && !reduceMotion && c.vy<.35*c.jumpV){
       c.trailAcc += Math.abs(c.vy)*dt;
-      if (c.trailAcc>TB.h0*.3){ c.trailAcc=0; const gs=1+TB.GROW*Math.pow(c.grow,1.3); c.trail.push({y:c.py,w:TB.W0*gs*.9,h:TB.h0*gs*.9,age:0}); if (c.trail.length>8) c.trail.shift(); }
+      if (c.trailAcc>TB.h0*.3){ c.trailAcc=0; const gs=1+R.chargeGrow/100*Math.pow(c.grow,1.3); c.trail.push({y:c.py,w:TB.W0*gs*.9,h:TB.h0*gs*.9,age:0}); if (c.trail.length>8) c.trail.shift(); }
     }
   }
   const n = Math.max(1,Math.ceil(dt*240)), h = dt/n;
@@ -2134,7 +2204,7 @@ function tutBurst(dt){
   for (let i=c.trail.length-1;i>=0;i--){ c.trail[i].age += dt; if (c.trail[i].age>=.35) c.trail.splice(i,1); }
   for (let i=c.rings.length-1;i>=0;i--){ c.rings[i].age += dt; if (c.rings[i].age>=c.rings[i].dur) c.rings.splice(i,1); }
   // body: swells with the charge, pulses faster, trembles; stretches in flight, squashes on landing
-  const gs = 1+TB.GROW*Math.pow(c.grow,1.3);
+  const gs = 1+R.chargeGrow/100*Math.pow(c.grow,1.3);
   const pulse = c.state==='idle' ? 1+c.pulseAmp*Math.sin(c.pulsePh) : 1;
   const fl = c.state==='flight' ? clamp(-c.vy/c.jumpV,-1,1) : 0, vs = Math.abs(fl)*(fl>0?.38:.16);
   const q = reduceMotion ? c.sq*.4 : c.sq;
@@ -2148,7 +2218,8 @@ function tutBurst(dt){
 function tutLaunch(){
   const c = tut.ch;
   c.state = 'flight'; c.armed = false;
-  const jumpH = c.idx===0 ? TB.RISE+TB.h0*.5 : TB.RISE*.9;       // clears the exit ledge, or hops in place on it
+  // clears the exit ledge (always: the extra height stays positive at every boost setting), or hops in place on it
+  const jumpH = c.idx===0 ? TB.RISE+TB.h0*.5*Math.max(.4,R.boost/100) : TB.RISE*.9*R.boost/100;
   c.jumpV = Math.sqrt(2*TB.g*jumpH); c.vy = -c.jumpV;
   c.grow = 1; c.charge = 0; c.sq = -1.2; c.sqv = 0; c.sqT = 0; c.trailAcc = 0;
   c.rings.push({y:c.py,from:TB.W0*.3,to:TB.W0*1.6,age:0,dur:.35});
@@ -2425,9 +2496,78 @@ function render(){
   if (fa>0){ ctx.fillStyle=`rgba(10,5,35,${fa})`; ctx.fillRect(0,0,W,H); }
 }
 
+/* ---------- REFINEMENT CONTROLS panel ---------- */
+const REF_GROUPS = [
+  {title:'1 · Wake', q:'Spongy', ctl:[
+    {k:'wakeSquash', label:'Squash Amount', min:8, max:50, step:1, unit:'%', lo:'firm', hi:'squishy'},
+    {k:'wakeOvershoot', label:'Rebound / Overshoot', min:0, max:60, step:.1, unit:'%', lo:'settles', hi:'wobbly'}]},
+  {title:'2 · Movement', q:'Snappy', ctl:[
+    {k:'moveResponse', label:'Response / Acceleration', min:4, max:40, step:1, unit:'/s', lo:'smooth', hi:'immediate', extra:v=>' ≈'+Math.round(3000/v)+' ms'},
+    {k:'moveLean', label:'Lean / Stretch', min:0, max:250, step:5, unit:'%', lo:'upright', hi:'leaning'}]},
+  {title:'3 · Flying', q:'Light', ctl:[
+    {k:'flyEase', label:'Mouse Follow Ease', min:40, max:250, step:5, unit:'%', lo:'stable', hi:'floaty'},
+    {k:'flyBob', label:'Floating / Bob Amount', min:0, max:300, step:5, unit:'%', lo:'heavy', hi:'buoyant'}]},
+  {title:'4 · Charge + Burst', q:'Springy', ctl:[
+    {k:'chargeTime', label:'Charge Duration', min:.4, max:2, step:.05, unit:' s', lo:'instant', hi:'tense', fmt:v=>v.toFixed(2)},
+    {k:'chargeGrow', label:'Growth Amount', min:0, max:100, step:1, unit:'%', lo:'none', hi:'huge', pre:'+'},
+    {k:'boost', label:'Boost Strength', min:50, max:200, step:5, unit:'%', lo:'gentle', hi:'explosive'}]}
+];
+const PRESETS = {
+  subtle:      {name:'Variation 1 — Subtle', v:{wakeSquash:14, wakeOvershoot:6, moveResponse:9, moveLean:50, flyEase:70, flyBob:40, chargeTime:1.0, chargeGrow:25, boost:90}},
+  balanced:    {name:'Variation 2 — Balanced (final)', v:Object.assign({}, FINAL)},
+  exaggerated: {name:'Variation 3 — Exaggerated', v:{wakeSquash:42, wakeOvershoot:45, moveResponse:28, moveLean:200, flyEase:170, flyBob:220, chargeTime:1.3, chargeGrow:80, boost:135}}
+};
+const refBody = document.getElementById('refBody'), refTab = document.getElementById('refTab'), refStatus = document.getElementById('refStatus');
+const refInputs = {}, refOuts = {};
+function refFmt(c, v){ return (c.pre||'')+(c.fmt ? c.fmt(v) : String(+v.toFixed(1)))+c.unit+(c.extra ? c.extra(v) : ''); }
+function refMatch(){ for (const id in PRESETS){ const v = PRESETS[id].v; if (Object.keys(v).every(k => Math.abs(v[k]-R[k])<1e-9)) return id; } return null; }
+function refSync(){
+  REF_GROUPS.forEach(g => g.ctl.forEach(c => { refInputs[c.k].value = R[c.k]; refOuts[c.k].textContent = refFmt(c, R[c.k]); }));
+  const m = refMatch();
+  document.querySelectorAll('#refBody [data-preset]').forEach(b => b.classList.toggle('on', b.dataset.preset===m));
+}
+function toggleRefine(force){
+  const open = force!=null ? force : refBody.hidden;
+  refBody.hidden = !open; refTab.setAttribute('aria-expanded', String(open));
+  refTab.textContent = '⚙ REFINEMENT CONTROLS '+(open?'▾':'▸');
+  if (!open && document.activeElement && document.activeElement.closest('#refine')) document.activeElement.blur();
+}
+(function buildRefine(){
+  const host = document.getElementById('refGroups');
+  REF_GROUPS.forEach(g => {
+    const d = document.createElement('details'); d.open = true;
+    d.innerHTML = '<summary>'+g.title+' <span>— '+g.q+'</span></summary>';
+    g.ctl.forEach(c => {
+      const w = document.createElement('div'); w.className = 'ctl';
+      w.innerHTML = '<div class="row"><label for="ref-'+c.k+'">'+c.label+'</label><output id="out-'+c.k+'"></output></div>'+
+        '<input type="range" id="ref-'+c.k+'" min="'+c.min+'" max="'+c.max+'" step="'+c.step+'">'+
+        '<div class="ends"><span>'+c.min+c.unit.trim()+' '+c.lo+'</span><span>'+c.hi+' '+c.max+c.unit.trim()+'</span></div>';
+      d.appendChild(w);
+      refInputs[c.k] = w.querySelector('input'); refOuts[c.k] = w.querySelector('output');
+      refInputs[c.k].addEventListener('input', () => { R[c.k] = parseFloat(refInputs[c.k].value); refSync(); refStatus.textContent = ''; });
+    });
+    host.appendChild(d);
+  });
+  refTab.addEventListener('click', () => toggleRefine());
+  document.querySelectorAll('#refBody [data-preset]').forEach(b => b.addEventListener('click', () => {
+    Object.assign(R, PRESETS[b.dataset.preset].v); refSync(); refStatus.textContent = PRESETS[b.dataset.preset].name+' applied.';
+  }));
+  document.getElementById('refReset').addEventListener('click', () => { Object.assign(R, FINAL); refSync(); refStatus.textContent = 'Final settings restored.'; });
+  document.getElementById('refCopy').addEventListener('click', () => {
+    const m = refMatch();
+    const lines = ['Monster Mayhem — refinement settings'+(m ? ' ('+PRESETS[m].name+')' : ' (custom)')];
+    REF_GROUPS.forEach(g => { lines.push(g.title+' ('+g.q+')'); g.ctl.forEach(c => lines.push('  '+c.label+': '+refFmt(c, R[c.k]))); });
+    const text = lines.join('\n');
+    const done = ok => { refStatus.textContent = ok ? 'Values copied to clipboard.' : 'Copy failed — select the numbers above instead.'; };
+    const fallback = () => { const ta = document.createElement('textarea'); ta.value = text; ta.style.position='fixed'; ta.style.opacity='0'; document.body.appendChild(ta); ta.select(); let ok=false; try { ok = document.execCommand('copy'); } catch (err) {} ta.remove(); done(ok); };
+    if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(text).then(() => done(true), fallback); else fallback();
+  });
+  refSync();
+})();
+
 startTutorial();
 // read-only snapshot for testing from the console
-window.__mm = () => ({state, step: tut ? tut.step : null, flying: !!(tut && tut.flying), landed: !!(tut && tut.landed), gi: tut ? tut.gi : null,
+window.__mm = () => ({R: Object.assign({}, R), state, step: tut ? tut.step : null, flying: !!(tut && tut.flying), landed: !!(tut && tut.landed), gi: tut ? tut.gi : null,
   did: tut && tut.did ? Object.assign({}, tut.did) : null, ch: tut && tut.ch ? {state: tut.ch.state, charge: tut.ch.charge, idx: tut.ch.idx, done: tut.ch.done} : null,
   P: {x: P.x, y: P.y, sc: P.sc, hp: P.hp}, camY, score, gates: tut && tut.gates, pick: tut && tut.pick, cp: tut && tut.cp ? {x: tut.cp.x, w: tut.cp.w, y: tut.cp.y} : null});
 document.getElementById('restartAll').addEventListener('click', e => {

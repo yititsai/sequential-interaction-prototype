@@ -19,6 +19,16 @@ Each step unlocks only after the previous one succeeds, and then the original ga
 After **TUTORIAL COMPLETE!** the original game begins at Section 1, with all of its levels, enemies, scoring, health, power-ups, Flying Mode, boost, sounds, game over/retry and win screen unchanged.
 Dying uses the game's normal retry. The **↺ Restart** button (top right) goes back to Tutorial Step 1; during the main game it asks first.
 
+### Refinement controls (Week 5)
+A **⚙ REFINEMENT CONTROLS** tab (top-left, or press the ` key) opens a design-tool panel that tunes the four behavioural qualities live:
+- **Wake / Spongy:** squash amount, rebound overshoot
+- **Movement / Snappy:** response/acceleration, lean/stretch
+- **Flying / Light:** mouse follow ease, floating/bob
+- **Charge + Burst / Springy:** charge duration, growth, boost strength
+
+Presets: **V1 Subtle**, **V2 Balanced** (= final settings) and **V3 Exaggerated**. There's also **Reset to Final Settings** and **Copy values** (for documentation).
+Settings never change the tutorial order, completion rules or controls, and the tutorial burst always clears the exit.
+
 ### Files
 - `docs/index.html`: the combined game (single file, like the original). The tutorial is the `TUTORIAL` section of the script.
 - `docs/journey/`: the earlier grayscale Monster's Journey sequence (https://yititsai.github.io/sequential-interaction-prototype/journey/)
