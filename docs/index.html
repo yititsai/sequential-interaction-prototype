@@ -143,8 +143,9 @@ const FONT = "'Luckiest Guy','Arial Black',Impact,sans-serif";
 const rand = (a, b) => a + Math.random() * (b - a);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const lerp = (a, b, t) => a + (b - a) * t;
-/* ---------- refinement settings (live-tuned by the REFINEMENT CONTROLS panel) ----------
-   FINAL holds the shipped values; every behaviour reads from R, so FINAL reproduces the prototype exactly. */
+/* ---------- behaviour settings: Variation 2 — Balanced is the saved final default ----------
+   FINAL is loaded into R when the page starts, and the tutorial and main game read every behaviour from R.
+   The REFINEMENT CONTROLS panel only changes R for the current visit; a reload always returns to FINAL. */
 const FINAL = Object.freeze({
   wakeSquash: 27,     // Wake: how far the body squashes on contact, % of its height (width bulges in proportion)
   wakeOvershoot: 22.9,// Wake: peak overshoot of the rebound after release, % (22.9% = the original damping 7.6)

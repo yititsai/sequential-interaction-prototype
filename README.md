@@ -26,6 +26,8 @@ A **⚙ REFINEMENT CONTROLS** tab (top-left, or press the ` key) opens a design-
 - **Flying / Light:** mouse follow ease, floating/bob
 - **Charge + Burst / Springy:** charge duration, growth, boost strength
 
+**Final default: Variation 2 — Balanced.** These values load with the page and drive the real tutorial and game: Wake squash 27%, overshoot 22.9%, movement response 16/s, lean 100%, flying follow ease 100%, bob 100%, charge 1.00 s, growth +45%, boost 100%. Panel changes last only for the current visit.
+
 Presets: **V1 Subtle**, **V2 Balanced** (= final settings) and **V3 Exaggerated**. There's also **Reset to Final Settings** and **Copy values** (for documentation).
 **Preview Behavior** (inside the panel) pauses the game and shows a demo scene for screenshots, using the live values:
 - **Spongy Wake:** a squish loop plus rest / max squash / peak overshoot poses against a rest-height line
