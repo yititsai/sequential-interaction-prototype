@@ -82,6 +82,13 @@ canvas{touch-action:none;display:block;width:100%;height:100%;border-radius:14px
 #refBody input[type=range]{width:100%;margin:3px 0 0;accent-color:#5ab0ff}
 #refBody .ends{display:flex;justify-content:space-between;color:#7a7a7a;font-size:10px}
 #refBody .actions{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:10px;border-top:1px solid #333;padding-top:10px}
+#refBody .pvgrid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px}
+#refBody .pvgrid button.on{background:#123a5c;border-color:#5ab0ff;color:#fff}
+#refBody .chk{display:flex;align-items:center;gap:6px;margin:8px 0 6px;cursor:pointer}
+#refBody .chk span{color:#7a7a7a}
+#refBody .chk input{accent-color:#5ab0ff}
+#pvExit{width:100%}
+#pvExit:disabled{opacity:.45;cursor:default}
 #refBody .status{min-height:1.3em;margin:6px 0 0;color:#9a9a9a;font-size:11px}
 </style>
 </head>
@@ -105,6 +112,18 @@ canvas{touch-action:none;display:block;width:100%;height:100%;border-radius:14px
       <button type="button" data-preset="exaggerated">V3 Exaggerated</button>
     </div>
     <div id="refGroups"></div>
+    <details open class="pv">
+      <summary>Preview Behavior <span>— for screenshots</span></summary>
+      <p class="note">Pauses the game and shows a demo using the values above. Nothing in the tutorial changes.</p>
+      <div class="pvgrid">
+        <button type="button" data-pv="wake">Preview Spongy Wake</button>
+        <button type="button" data-pv="move">Preview Snappy Movement</button>
+        <button type="button" data-pv="fly">Preview Light Flying</button>
+        <button type="button" data-pv="charge">Preview Springy Charge</button>
+      </div>
+      <label class="chk"><input type="checkbox" id="refHold"> Hold at 80% Charge <span>(Springy Charge)</span></label>
+      <button type="button" id="pvExit" disabled>Exit preview · resume game</button>
+    </details>
     <div class="actions">
       <button type="button" id="refReset">Reset to Final Settings</button>
       <button type="button" id="refCopy">Copy values</button>
@@ -345,6 +364,7 @@ function actionStart(){
 
 /* ---------- input ---------- */
 function press(k){
+  if (preview) return;                          // previews never drive the game
   if (k==='left'||k==='right'){ keys[k]=true; return; }
   if (state==='tutorial'){ tutPress(k); return; }
   if (state!=='play'){ actionStart(); return; }
@@ -380,6 +400,7 @@ window.addEventListener('pointerup', pUp); window.addEventListener('pointercance
 window.addEventListener('pointermove', e => { const q = toGame(e); mouseX = q.x; mouseY = q.y; });
 cv.addEventListener('pointerdown', e => {
   if (document.activeElement && document.activeElement.closest && document.activeElement.closest('#refine')) document.activeElement.blur();
+  if (preview) return;
   const q = toGame(e); mouseX = q.x; mouseY = q.y;
   if (state==='play' || (state==='tutorial' && tut && tut.step===4)){ if (e.pointerType==='touch') touchIds.add(e.pointerId); else mouseDown = true; }
   if (state==='tutorial'){ tutPointerDown(e,q); return; }
@@ -2518,7 +2539,7 @@ const PRESETS = {
   exaggerated: {name:'Variation 3 — Exaggerated', v:{wakeSquash:42, wakeOvershoot:45, moveResponse:28, moveLean:200, flyEase:170, flyBob:220, chargeTime:1.3, chargeGrow:80, boost:135}}
 };
 const refBody = document.getElementById('refBody'), refTab = document.getElementById('refTab'), refStatus = document.getElementById('refStatus');
-const refInputs = {}, refOuts = {};
+const refInputs = {}, refOuts = {}, refHold = document.getElementById('refHold');
 function refFmt(c, v){ return (c.pre||'')+(c.fmt ? c.fmt(v) : String(+v.toFixed(1)))+c.unit+(c.extra ? c.extra(v) : ''); }
 function refMatch(){ for (const id in PRESETS){ const v = PRESETS[id].v; if (Object.keys(v).every(k => Math.abs(v[k]-R[k])<1e-9)) return id; } return null; }
 function refSync(){
@@ -2552,6 +2573,18 @@ function toggleRefine(force){
   document.querySelectorAll('#refBody [data-preset]').forEach(b => b.addEventListener('click', () => {
     Object.assign(R, PRESETS[b.dataset.preset].v); refSync(); refStatus.textContent = PRESETS[b.dataset.preset].name+' applied.';
   }));
+  const pvSync = () => {
+    document.querySelectorAll('#refBody [data-pv]').forEach(b => b.classList.toggle('on', !!preview && b.dataset.pv===preview.kind));
+    document.getElementById('pvExit').disabled = !preview;
+  };
+  document.querySelectorAll('#refBody [data-pv]').forEach(b => b.addEventListener('click', () => {
+    startPreview(b.dataset.pv); pvSync(); refStatus.textContent = 'Previewing '+PV_NAMES[b.dataset.pv]+' — game paused.';
+  }));
+  refHold.addEventListener('change', () => {
+    if (refHold.checked && (!preview || preview.kind!=='charge')) startPreview('charge');
+    pvSync(); refStatus.textContent = refHold.checked ? 'Holding at 80% charge.' : 'Charge loop running.';
+  });
+  document.getElementById('pvExit').addEventListener('click', () => { stopPreview(); refHold.checked = false; pvSync(); refStatus.textContent = 'Preview closed — game resumed.'; });
   document.getElementById('refReset').addEventListener('click', () => { Object.assign(R, FINAL); refSync(); refStatus.textContent = 'Final settings restored.'; });
   document.getElementById('refCopy').addEventListener('click', () => {
     const m = refMatch();
@@ -2565,9 +2598,204 @@ function toggleRefine(force){
   refSync();
 })();
 
+/* ---------- PREVIEW BEHAVIOR (documentation only) ----------
+   Pauses the game exactly where it is and shows a small demo scene that uses the live
+   refinement values. Nothing here touches game or tutorial state; closing resumes the game. */
+let preview = null;          // {kind, t, ...sim state}
+const PV_NAMES = {wake:'Spongy Wake', move:'Snappy Movement', fly:'Light Flying', charge:'Springy Charge'};
+const PV_FEEL = {wake:'Spongy', move:'Snappy', fly:'Light', charge:'Springy'};
+function startPreview(kind){
+  preview = {kind, t:0, q:0, qv:0, target:0, k:160, c:2*Math.sqrt(160), ripples:[], lastPh:0,
+    x:110, vx:0, ghosts:[], gT:0, speeds:[], fx:120, fvx:0, ftxs:120, fang:0, fav:0, fBob:0, path:[], pT:0,
+    st:'rest', stT:0, charge:0, grow:0, sq:0, sqv:0, sqT:0, py:0, vy:0, jumpV:1, pulsePh:0, pulseRate:TAU/2.6, pulseAmp:.018};
+  keys.left = keys.right = keys.jump = false; mouseDown = false;
+  cv.style.cursor = 'default';
+}
+function stopPreview(){ preview = null; last = performance.now(); }
+function hold80(){ return !!(refHold && refHold.checked); }
+
+function updatePreview(dt){
+  const v = preview; v.t += dt; time += dt;
+  P.blinkT -= dt; if (P.blinkT<=0){ P.blink=.12; P.blinkT=rand(2,4); } P.blink -= dt;
+  const n = Math.max(1,Math.ceil(dt*240)), h = dt/n;
+  if (v.kind==='wake'){
+    const ph = v.t % 2.6;                                    // press at 0.4 s, release at 0.65 s, then rest
+    if (v.lastPh<.4 && ph>=.4){ v.target=1; v.k=380; v.c=30; }
+    if (v.lastPh<.65 && ph>=.65){ v.target=0; v.k=80; v.c=2*Math.sqrt(80)*dampingFor(R.wakeOvershoot); v.ripples.push({age:-.14}); }
+    v.lastPh = ph;
+    for (let i=0;i<n;i++){ v.qv += (-v.k*(v.q-v.target) - v.c*v.qv)*h; v.q += v.qv*h; }
+    v.ripples.forEach(r => r.age += dt); v.ripples = v.ripples.filter(r => r.age<1.7);
+  } else if (v.kind==='move'){
+    const ph = v.t % 3.2, dir = ph<1.1 ? 1 : ph<1.6 ? 0 : ph<2.7 ? -1 : 0;   // run right, stop, run left, stop
+    v.vx += (dir*228 - v.vx)*Math.min(1, R.moveResponse*dt);
+    v.x = clamp(v.x + v.vx*dt, 50, W-50);
+    if (dir) P.face = dir;
+    P.walkT += dt*Math.abs(v.vx)/200;
+    v.gT -= dt; if (v.gT<=0){ v.gT = .08; v.ghosts.push({x:v.x, vx:v.vx, face:P.face, walkT:P.walkT, age:0}); }
+    v.ghosts.forEach(g => g.age += dt); v.ghosts = v.ghosts.filter(g => g.age<1.2);
+    v.speeds.push({t:v.t, s:v.vx}); while (v.speeds.length && v.t-v.speeds[0].t>3.2) v.speeds.shift();
+  } else if (v.kind==='fly'){
+    const L = R.flyEase/100, tx = (Math.floor(v.t/2.4)%2) ? 360 : 120;      // the "mouse" hops side to side
+    v.tx = tx;
+    const kx = 13/L, cx = 5.4/Math.pow(L,.8);
+    for (let i=0;i<n;i++){
+      v.ftxs += (tx-v.ftxs)*(1-Math.exp(-h*7/L));
+      v.fvx += (-kx*(v.fx-v.ftxs) - cx*v.fvx)*h; v.fx += v.fvx*h;
+      const lt = clamp(v.fvx*.024,-18,18); v.fav += (-45*(v.fang-lt) - 5.5*v.fav)*h; v.fang += v.fav*h;
+    }
+    const bk = R.flyBob/100;
+    v.fBob = (Math.sin(v.t*TAU/3.6)+.18*Math.sin(v.t*TAU/1.8+1.2))*9*bk;
+    v.sway = Math.sin(v.t*TAU/5.6)*6*bk; v.idle = Math.cos(v.t*TAU/5.6)*2.4*bk;
+    if (Math.abs(v.fvx)>30) P.face = v.fvx>0 ? 1 : -1;
+    v.pT -= dt; if (v.pT<=0){ v.pT = .05; v.path.push({x:v.fx+v.sway, y:v.fBob, age:0}); }
+    v.path.forEach(p => p.age += dt); v.path = v.path.filter(p => p.age<2.4);
+  } else {
+    if (hold80()){                                      // frozen at 80%: grown, squashed, ring at 80%
+      v.st = 'hold'; v.charge = .8; v.grow = .8; v.sq = 1-.85*.8; v.sqv = 0; v.py = 0; v.vy = 0;
+      v.pulseAmp = .015+.05*.8;
+      return;
+    }
+    if (v.st==='hold'){ v.st = 'rest'; v.stT = 0; v.charge = 0; }
+    v.stT += dt;
+    if (v.st==='rest'){ v.sqT = 0; v.grow *= Math.exp(-dt*7); if (v.stT>.8){ v.st='charge'; v.stT=0; } }
+    else if (v.st==='charge'){
+      v.charge = Math.min(1, v.charge+dt/R.chargeTime); v.grow = v.charge; v.sqT = 1-.85*v.charge;
+      if (v.charge>=1){ v.st='flight'; v.stT=0; const jh = TB.RISE+TB.h0*.5*Math.max(.4,R.boost/100); v.jumpV = Math.sqrt(2*TB.g*jh); v.vy = -v.jumpV; v.grow = 1; v.charge = 0; v.sq = -1.2; v.sqv = 0; v.sqT = 0; sfx('boost'); }
+    } else if (v.st==='flight'){
+      v.vy += TB.g*dt; v.py += v.vy*dt; v.grow *= Math.exp(-dt*5);
+      if (v.py>=0 && v.vy>0){ v.py = 0; v.vy = 0; v.st='rest'; v.stT=0; v.sq = .85; v.sqv = 0; }
+    }
+    const building = v.st==='charge';
+    const rateT = building ? TAU*(1.8+10*v.charge) : TAU/2.6, ampT = building ? .015+.05*v.charge : .018;
+    v.pulseRate += (rateT-v.pulseRate)*(1-Math.exp(-dt*10)); v.pulseAmp += (ampT-v.pulseAmp)*(1-Math.exp(-dt*10)); v.pulsePh += v.pulseRate*dt;
+    for (let i=0;i<n;i++){ v.sqv += (-480*(v.sq-v.sqT) - 34*v.sqv)*h; v.sq += v.sqv*h; }
+  }
+}
+
+function pvPanel(lines, y){
+  const w = W-40;
+  ctx.fillStyle='rgba(12,6,40,.82)'; ctx.strokeStyle='#5ab0ff'; ctx.lineWidth=2.5; rr(ctx,20,y,w,22+lines.length*18,12); ctx.fill(); ctx.stroke();
+  lines.forEach((l,i) => txt(l, W/2, y+20+i*18, i?13:17, i?'#fff':'#5ab0ff', {lw:i?3:4}));
+}
+function pvMonster(x,y,s,o){ drawMonster(ctx,x,y,s,Object.assign({face:P.face,sq:0,mood:'happy',walk:false,walkT:P.walkT,air:false,blink:P.blink,lx:0,ly:.2,rot:0,t:time},o)); }
+function pvGround(y){ ctx.fillStyle='#4ac03a'; rr(ctx,30,y,W-60,10,5); ctx.fill(); ctx.fillStyle='#2b1a62'; ctx.fillRect(30,y+10,W-60,6); }
+
+function renderPreview(){
+  const v = preview;
+  ctx.setTransform(scaleF,0,0,scaleF,0,0);
+  drawBG();
+  ctx.fillStyle='rgba(10,5,35,.45)'; ctx.fillRect(0,0,W,H);
+  const preset = refMatch(), pname = preset ? PRESETS[preset].name : 'Custom settings';
+  const head = ['PREVIEW · '+PV_NAMES[v.kind].toUpperCase()];
+  if (v.kind==='wake'){
+    const sk = R.wakeSquash/27, os = R.wakeOvershoot/100;
+    head.push('Squash '+R.wakeSquash+'%  ·  Overshoot '+R.wakeOvershoot+'%');
+    const gy = 400, s = 2.2;
+    pvGround(gy);
+    const pop = 1+Math.max(0,-v.q)*.1;
+    v.ripples.forEach(r => { if (r.age<0) return; const k = (function(x){ return 1-Math.pow(1-x,3); })(Math.min(1,r.age/1.7));
+      ctx.save(); ctx.globalAlpha=.5*(1-k); ctx.strokeStyle='#ffe14a'; ctx.lineWidth=2.5; circ(ctx,W/2,gy-26*s,40*s*(1+1.2*k)); ctx.stroke(); ctx.restore(); });
+    pvMonster(W/2, gy, s, {ex:(1+.16*sk*v.q)*pop, ey:(1-.27*sk*v.q)*pop, mood: v.target>0 ? 'surprised' : 'happy'});
+    // key poses: rest / max squash / peak overshoot, against the rest height
+    const ky = 600, ks = 1.15, xs = [110,240,370], top = ky-76*ks;
+    ctx.save(); ctx.strokeStyle='rgba(255,255,255,.5)'; ctx.setLineDash([6,6]); ctx.lineWidth=1.5; ctx.beginPath(); ctx.moveTo(40,top); ctx.lineTo(W-40,top); ctx.stroke(); ctx.restore();
+    txt('rest height', 58, top-10, 11, '#ccc', {lw:2, align:'left'});
+    pvGround(ky);
+    pvMonster(xs[0], ky, ks, {mood:'normal'});
+    pvMonster(xs[1], ky, ks, {ex:1+.16*sk, ey:1-.27*sk, mood:'surprised'});
+    pvMonster(xs[2], ky, ks, {ex:(1-.16*sk*os)*(1+os*.1), ey:(1+.27*sk*os)*(1+os*.1), mood:'happy'});
+    txt('REST', xs[0], ky+30, 14, '#fff', {lw:3});
+    txt('MAX SQUASH '+R.wakeSquash+'%', xs[1], ky+30, 14, '#ffe14a', {lw:3});
+    txt('OVERSHOOT '+R.wakeOvershoot+'%', xs[2], ky+30, 14, '#9bf08a', {lw:3});
+  } else if (v.kind==='move'){
+    const lk = R.moveLean/100;
+    head.push('Response '+R.moveResponse+'/s (≈'+Math.round(3000/R.moveResponse)+' ms)  ·  Lean '+R.moveLean+'%');
+    const gy = 420;
+    pvGround(gy);
+    const pose = (vx) => { const run = clamp(vx/228,-1,1); return {rot:run*.1*lk, sq: lk>1 ? -Math.abs(run)*.05*(lk-1) : 0}; };
+    v.ghosts.forEach(g => { const p = pose(g.vx); ctx.save(); ctx.globalAlpha = .28*(1-g.age/1.2);
+      pvMonster(g.x, gy, 1.5, {face:g.face, rot:p.rot, sq:p.sq, walk:Math.abs(g.vx)>40, walkT:g.walkT, mood:'normal'}); ctx.restore(); });
+    const p = pose(v.vx);
+    pvMonster(v.x, gy, 1.5, {rot:p.rot, sq:p.sq, walk:Math.abs(v.vx)>40, mood:'normal'});
+    txt('afterimages every 0.08 s — wider gaps sooner = snappier', W/2, gy+34, 12, '#ccc', {lw:3});
+    // speed over time
+    const bx = 40, by = 500, bw = W-80, bh = 120;
+    ctx.fillStyle='rgba(12,6,40,.75)'; rr(ctx,bx,by,bw,bh,10); ctx.fill();
+    ctx.strokeStyle='rgba(255,255,255,.25)'; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(bx+10,by+bh/2); ctx.lineTo(bx+bw-10,by+bh/2); ctx.stroke();
+    ctx.strokeStyle='#ffe14a'; ctx.lineWidth=3; ctx.beginPath();
+    v.speeds.forEach((q,i) => { const x = bx+10+(bw-20)*(1-(v.t-q.t)/3.2), y = by+bh/2-(q.s/228)*(bh/2-12); i ? ctx.lineTo(x,y) : ctx.moveTo(x,y); }); ctx.stroke();
+    txt('SPEED OVER TIME (last 3.2 s)', bx+4, by-10, 11, '#ccc', {lw:2, align:'left'});
+    txt('full-speed lean: '+(Math.atan(.1*lk)*180/Math.PI).toFixed(1)+'°', bx+bw-4, by+bh+14, 12, '#9bf08a', {lw:3, align:'right'});
+  } else if (v.kind==='fly'){
+    head.push('Follow ease '+R.flyEase+'%  ·  Bob '+R.flyBob+'%');
+    const by = 380;
+    // the scripted "mouse"
+    ctx.save(); ctx.translate(v.tx, 200); ctx.fillStyle='#fff'; ctx.strokeStyle='#201046'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(0,22); ctx.lineTo(6,17); ctx.lineTo(10,26); ctx.lineTo(14,24); ctx.lineTo(10,15); ctx.lineTo(17,15); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.restore();
+    txt('mouse', v.tx, 240, 12, '#7fe3ff', {lw:3});
+    ctx.save(); ctx.strokeStyle='rgba(127,227,255,.35)'; ctx.setLineDash([4,6]); ctx.beginPath(); ctx.moveTo(v.tx,250); ctx.lineTo(v.tx,by-60); ctx.stroke(); ctx.restore();
+    v.path.forEach(q => { ctx.globalAlpha = .7*(1-q.age/2.4); ctx.fillStyle='#bfefff'; circ(ctx, q.x, by-24+q.y, 3); ctx.fill(); });
+    ctx.globalAlpha = 1;
+    const x = v.fx+v.sway, y = by+v.fBob;
+    drawWings(x, y, 1.6, 16, 1);
+    pvMonster(x, y, 1.6, {rot:(v.fang+v.idle)*Math.PI/180, mood:'jump', air:true, ly:-.5});
+    txt('dotted path = last 2.4 s of flight (lag, overshoot and bob)', W/2, 560, 12, '#ccc', {lw:3});
+  } else {
+    const G = R.chargeGrow/100, held = v.st==='hold';
+    const gy = 470, s = 1.6;
+    const gs = 1+G*Math.pow(v.grow,1.3);
+    const pulse = held ? 1+v.pulseAmp : (v.st!=='flight' ? 1+v.pulseAmp*Math.sin(v.pulsePh) : 1);
+    const fl = v.st==='flight' ? clamp(-v.vy/v.jumpV,-1,1) : 0, vs = Math.abs(fl)*(fl>0?.38:.16);
+    const sx = gs*pulse*(1+.08*v.sq)*(1-.55*vs), sy = gs*pulse*(1-.14*v.sq)*(1+vs);
+    const vib = (!held && v.st==='charge') ? Math.pow(v.grow,1.2)*TB.W0*.055*s : 0;
+    const dx = vib ? Math.sin(time*(40+100*v.grow))*vib : 0;
+    head.push((held?'HELD AT 80% · ':'')+'Charge '+R.chargeTime.toFixed(2)+' s  ·  Growth +'+R.chargeGrow+'%  ·  Boost '+R.boost+'%');
+    pvGround(gy);
+    // burst apex for the current boost, and the exit ledge height it must clear
+    const apex = TB.RISE+TB.h0*.5*Math.max(.4,R.boost/100), ey = gy-TB.RISE*s*.9, ay = gy-apex*s*.9;
+    ctx.save(); ctx.setLineDash([6,6]); ctx.lineWidth=1.5;
+    ctx.strokeStyle='rgba(255,255,255,.45)'; ctx.beginPath(); ctx.moveTo(40,ey); ctx.lineTo(W-40,ey); ctx.stroke();
+    ctx.strokeStyle='#ffe14a'; ctx.beginPath(); ctx.moveTo(40,ay); ctx.lineTo(W-40,ay); ctx.stroke(); ctx.restore();
+    txt('exit ledge', 44, ey+12, 11, '#ccc', {lw:2, align:'left'});
+    txt('burst apex', 44, ay-10, 11, '#ffe14a', {lw:2, align:'left'});
+    const py = gy + v.py*s*.9;
+    // faint rest-size ghost for comparison
+    ctx.save(); ctx.globalAlpha=.22; pvMonster(W/2, gy, s, {mood:'normal'}); ctx.restore();
+    if (v.charge>.02 || held){
+      const k = v.charge, ag = ctx.createRadialGradient(W/2,py-24*s,6,W/2,py-24*s,(55+55*k)*s);
+      ag.addColorStop(0,`rgba(255,${Math.round(200+55*k)},${Math.round(60+150*k)},.65)`); ag.addColorStop(1,'rgba(255,159,28,0)');
+      ctx.fillStyle=ag; circ(ctx,W/2,py-24*s,(55+55*k)*s); ctx.fill();
+    }
+    pvMonster(W/2+dx, py, s, {ex:sx, ey:sy, mood: v.st==='flight' ? 'jump' : (v.charge>.05||held) ? 'gulp' : 'happy', air:v.st==='flight'});
+    if (v.charge>.003 && v.st!=='flight'){
+      const curW = TB.W0*sx*s, curH = TB.h0*sy*s, rx = curW/2+18, ry = curH/2+18, ry0 = py-curH/2-4;
+      ctx.save(); ctx.strokeStyle='#fff'; ctx.globalAlpha=.3; ctx.lineWidth=2; ctx.beginPath(); ctx.ellipse(W/2,ry0,rx,ry,0,0,TAU); ctx.stroke();
+      ctx.globalAlpha=1; ctx.strokeStyle=v.charge>.7?'#fff3b0':'#ffe14a'; ctx.lineWidth=4; ctx.lineCap='round';
+      ctx.beginPath(); ctx.ellipse(W/2,ry0,rx,ry,0,-Math.PI/2,-Math.PI/2+TAU*v.charge); ctx.stroke();
+      const ea = -Math.PI/2+TAU*v.charge; ctx.fillStyle='#ffe14a'; circ(ctx,W/2+rx*Math.cos(ea),ry0+ry*Math.sin(ea),5); ctx.fill(); ctx.restore();
+      txt(Math.round(v.charge*100)+'%', W/2+rx+22, ry0, 16, '#ffe14a', {lw:4});
+    }
+    if (held){                                   // tremble marks stand in for the vibration in a still
+      const amp = Math.pow(.8,1.2)*TB.W0*.055*s, hw = TB.W0*sx*s/2;
+      ctx.save(); ctx.strokeStyle='#ffe14a'; ctx.lineWidth=2.5; ctx.lineCap='round';
+      for (const sd of [-1,1]) for (let i=0;i<3;i++){ const x0 = W/2+sd*(hw+10+i*7), yy = py-TB.h0*sy*s*.5; ctx.globalAlpha=.9-i*.25; ctx.beginPath(); ctx.moveTo(x0,yy-8-amp); ctx.lineTo(x0,yy+8+amp); ctx.stroke(); }
+      ctx.restore();
+    }
+    const sizePct = Math.round((gs*pulse-1)*100), sqPct = Math.round(.14*v.sq*100);
+    const ly = 560;
+    ctx.fillStyle='rgba(12,6,40,.78)'; rr(ctx,40,ly,W-80,held?78:56,12); ctx.fill();
+    txt(held ? 'FROZEN AT 80% CHARGE' : 'state: '+v.st, W/2, ly+18, 15, held?'#ffe14a':'#ccc', {lw:3});
+    txt('size +'+Math.max(0,sizePct)+'%   ·   squash '+Math.max(0,sqPct)+'%   ·   apex '+Math.round(apex)+' px', W/2, ly+40, 13, '#fff', {lw:3});
+    if (held) txt('faint outline = resting size', W/2, ly+60, 11, '#ccc', {lw:2});
+  }
+  head.push(pname);
+  pvPanel(head, 16);
+  txt('Preview only — game paused, tutorial progress unchanged', W/2, H-18, 12, '#9a86d6', {lw:3});
+}
+
 startTutorial();
 // read-only snapshot for testing from the console
-window.__mm = () => ({R: Object.assign({}, R), state, step: tut ? tut.step : null, flying: !!(tut && tut.flying), landed: !!(tut && tut.landed), gi: tut ? tut.gi : null,
+window.__mm = () => ({preview: preview ? {kind: preview.kind, st: preview.st, charge: preview.charge, t: preview.t, hold: hold80()} : null, R: Object.assign({}, R), state, step: tut ? tut.step : null, flying: !!(tut && tut.flying), landed: !!(tut && tut.landed), gi: tut ? tut.gi : null,
   did: tut && tut.did ? Object.assign({}, tut.did) : null, ch: tut && tut.ch ? {state: tut.ch.state, charge: tut.ch.charge, idx: tut.ch.idx, done: tut.ch.done} : null,
   P: {x: P.x, y: P.y, sc: P.sc, hp: P.hp}, camY, score, gates: tut && tut.gates, pick: tut && tut.pick, cp: tut && tut.cp ? {x: tut.cp.x, w: tut.cp.w, y: tut.cp.y} : null});
 document.getElementById('restartAll').addEventListener('click', e => {
@@ -2580,7 +2808,8 @@ document.getElementById('restartAll').addEventListener('click', e => {
 let last = performance.now();
 function frame(now){
   const dt = Math.min(.033,(now-last)/1000); last = now;
-  step(dt); render();
+  if (preview){ updatePreview(dt); renderPreview(); }
+  else { step(dt); render(); }
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);

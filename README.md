@@ -27,6 +27,13 @@ A **⚙ REFINEMENT CONTROLS** tab (top-left, or press the ` key) opens a design-
 - **Charge + Burst / Springy:** charge duration, growth, boost strength
 
 Presets: **V1 Subtle**, **V2 Balanced** (= final settings) and **V3 Exaggerated**. There's also **Reset to Final Settings** and **Copy values** (for documentation).
+**Preview Behavior** (inside the panel) pauses the game and shows a demo scene for screenshots, using the live values:
+- **Spongy Wake:** a squish loop plus rest / max squash / peak overshoot poses against a rest-height line
+- **Snappy Movement:** afterimages every 0.08 s plus a speed-over-time graph
+- **Light Flying:** a dotted path showing lag, overshoot and bob
+- **Springy Charge:** a charge → burst loop with burst-apex and exit-ledge lines, plus **Hold at 80% Charge**, which freezes the pose with ring, aura and size numbers
+
+**Exit preview** resumes the game exactly where it was.
 Settings never change the tutorial order, completion rules or controls, and the tutorial burst always clears the exit.
 
 ### Files
