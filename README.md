@@ -20,7 +20,11 @@ After **TUTORIAL COMPLETE!** the original game begins at Section 1, with all of 
 Dying uses the game's normal retry. The **↺ Restart** button (top right) goes back to Tutorial Step 1; during the main game it asks first.
 
 ### Refinement controls (Week 5)
-A **⚙ REFINEMENT CONTROLS** tab (top-left, or press the ` key) opens a design-tool panel that tunes the four behavioural qualities live:
+**Hidden in the public prototype.** Players only see the normal game. To bring the tool back during development, add `?refine` to the URL:
+https://yititsai.github.io/sequential-interaction-prototype/?refine
+(or open `docs/index.html?refine` locally). For a permanent switch, set `REFINE_TOOL` to `true` near the top of the script in `docs/index.html`.
+
+When enabled, a **⚙ REFINEMENT CONTROLS** tab (top-left, or press the ` key) opens a design-tool panel that tunes the four behavioural qualities live:
 - **Wake / Spongy:** squash amount, rebound overshoot
 - **Movement / Snappy:** response/acceleration, lean/stretch
 - **Flying / Light:** mouse follow ease, floating/bob

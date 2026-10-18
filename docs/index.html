@@ -59,6 +59,7 @@ canvas{touch-action:none;display:block;width:100%;height:100%;border-radius:14px
 #restartAll:focus-visible{outline:2px solid #ffe14a;outline-offset:2px}
 
 /* ===== REFINEMENT CONTROLS: design/debug tool layer, not part of the game ===== */
+#refine[hidden]{display:none!important}
 #refine{position:fixed;left:12px;top:12px;z-index:50;max-height:calc(100vh - 24px);display:flex;flex-direction:column;
   font:12px/1.35 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:#e6e6e6;letter-spacing:0;user-select:text;-webkit-user-select:text;touch-action:auto}
 #refTab{align-self:flex-start;padding:7px 11px;border-radius:6px;border:1px dashed #8a8a8a;background:#202020;color:#e6e6e6;
@@ -102,7 +103,8 @@ canvas{touch-action:none;display:block;width:100%;height:100%;border-radius:14px
   </div>
 </div>
 
-<div id="refine" aria-label="Refinement controls (design tool)">
+<!-- Design tool. Hidden in the public prototype; open the page with ?refine to show it (see REFINE_TOOL in the script). -->
+<div id="refine" aria-label="Refinement controls (design tool)" hidden>
   <button id="refTab" type="button" aria-expanded="false" aria-controls="refBody" title="Show / hide (` key)">⚙ REFINEMENT CONTROLS ▸</button>
   <div id="refBody" hidden>
     <p class="note">Design tool. Changes apply live. Tutorial order, completion rules and controls are unchanged.</p>
@@ -143,6 +145,12 @@ const FONT = "'Luckiest Guy','Arial Black',Impact,sans-serif";
 const rand = (a, b) => a + Math.random() * (b - a);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const lerp = (a, b, t) => a + (b - a) * t;
+/* ---------- refinement tool switch ----------
+   The REFINEMENT CONTROLS panel (sliders, presets, previews) stays in the code but is hidden from players.
+   To use it during development, either open the page with ?refine at the end of the URL
+   (e.g. .../sequential-interaction-prototype/?refine) or set the fallback below to true. */
+const REFINE_TOOL = /[?&]refine\b/.test(location.search) || false;
+
 /* ---------- behaviour settings: Variation 2 — Balanced is the saved final default ----------
    FINAL is loaded into R when the page starts, and the tutorial and main game read every behaviour from R.
    The REFINEMENT CONTROLS panel only changes R for the current visit; a reload always returns to FINAL. */
@@ -376,7 +384,7 @@ function release(k){ if (k in keys) keys[k] = false; }
 const KMAP = {ArrowLeft:'left',ArrowRight:'right',ArrowUp:'jump',Space:'fire'};
 const inRefine = e => !!(e.target && e.target.closest && e.target.closest('#refine'));
 window.addEventListener('keydown', e => {
-  if (e.code==='Backquote'){ e.preventDefault(); toggleRefine(); return; }
+  if (e.code==='Backquote' && REFINE_TOOL){ e.preventDefault(); toggleRefine(); return; }
   if (inRefine(e)) return;                      // typing in the refinement panel never moves the monster
   if (e.code==='KeyM'){ muted = !muted; return; }
   if (e.code==='ArrowDown'){ e.preventDefault(); return; }   // Down does nothing
@@ -2794,6 +2802,7 @@ function renderPreview(){
   txt('Preview only — game paused, tutorial progress unchanged', W/2, H-18, 12, '#9a86d6', {lw:3});
 }
 
+document.getElementById('refine').hidden = !REFINE_TOOL;   // players never see the design tool
 startTutorial();
 // read-only snapshot for testing from the console
 window.__mm = () => ({preview: preview ? {kind: preview.kind, st: preview.st, charge: preview.charge, t: preview.t, hold: hold80()} : null, R: Object.assign({}, R), state, step: tut ? tut.step : null, flying: !!(tut && tut.flying), landed: !!(tut && tut.landed), gi: tut ? tut.gi : null,
